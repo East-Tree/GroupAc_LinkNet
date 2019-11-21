@@ -7,10 +7,6 @@ from torch.utils import data
 
 from PIL import Image
 
-cfg = config.Config()
-
-print("The work directory is %s" % cfg.workPath)
-print("From %s import volleyball dataset" % cfg.dataPath)
 
 # define the volleyball dataset class
 class VolleyballDataset(data.Dataset):

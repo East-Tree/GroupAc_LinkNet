@@ -14,6 +14,11 @@ class VolleyballDataset(data.Dataset):
         self.cfg = cfg
         self.datasetPath = cfg.dataPath + '/volleyball'
         self.frameList = list(range(50)) #generate reading list for volleyball dataset
+
+        # according to official document, the label bbox is corresponding to (720,1280)
+        self.scaleW = float(self.cfg.imageSize[1]/1280)
+        self.scaleH = float(self.cfg.imageSize[0]/720)
+
         self.annotationData = self.readAnnotation()
         self.allFrames = self.readAllFrames()
 
@@ -46,7 +51,7 @@ class VolleyballDataset(data.Dataset):
 
     @classmethod
     def actionToId(cls,index):
-        assert index in cls.ACTIONS, 'not in action list'
+        assert index in cls.ACTIONS, '%s not in action list' % index
         return cls.action2id[index]
 
     @classmethod
@@ -77,21 +82,25 @@ class VolleyballDataset(data.Dataset):
                     48075.jpg r_winpoint 372 442 86 130 falling 712 426 73 124 falling 338 346 45 159....
                     """
                     value = line[:-1].split(' ')
+
                     fileName = value[0]
                     activity = value[1]
-                    activity = VolleyballDataset.activityToId(activity)  # convert the activity to id number
+                    activity = [VolleyballDataset.activityToId(activity)]  # convert the activity to id number
                     value = value[2:]
-                    induvidualNum = len(value) / 5.0
-                    assert type(induvidualNum) == int, 'the error occurs in %s at %s' % (fileName, annotationPath)
-                    induvidualNum=int(induvidualNum)   # here is the bbox count in a frame
+                    #assert len(value)%5 == 0, 'the error occurs in %s at %s' % (fileName, annotationPath)
+                    if len(value)%5 != 0:
+                        print('the error occurs in %s at %s' % (fileName, annotationPath))
+                    induvidualNum = int(len(value) / 5)   # here is the bbox count in a frame
                     action = []
                     bbox = []
                     for i in range(induvidualNum):
-                        x, y, w, h = map(int, value[i:i+4])
-                        x2 = x + w
-                        y2 = y + h
-                        bbox.append((x, y, x2, y2))
-                        action.append(VolleyballDataset.actionToId(value[i+5]))
+                        x1, y1, w, h = map(int,value[i*5:i*5+4])
+                        x2 = x1 + w
+                        y2 = y1 + h
+                        x1, x2 = map(lambda x: int(x * self.scaleW), [x1, x2])
+                        y1, y2 = map(lambda x: int(x * self.scaleH), [y1, y2])
+                        bbox.append([x1, y1, x2, y2])
+                        action.append([VolleyballDataset.actionToId(value[i*5+4])])
                     fid = int(fileName.split('.')[0])
                     annotation[fid] = {
                         'file_name': fileName,  # the file name of a single frame, like 00000.jpg
@@ -115,14 +124,21 @@ class VolleyballDataset(data.Dataset):
         sid, fid = frameIndex
         framePath = self.datasetPath + '/%d/%d/%d.jpg' % (sid, fid, fid)
         img = Image.open(framePath)
-        img = Tfunc.resize(img,self.cfg.imageSize)
+        img = Tfunc.resize(img, self.cfg.imageSize)
         img = np.array(img)
 
         # H, W, 3 -> 3, H, W
-        img.transpose(2,0,1)
+        img = img.transpose((2, 0, 1))
 
-        activity = self.annotationData[sid][fid]['group_activity']
-        action = self.annotationData[sid][fid]['action']
-        bbox = self.annotationData[sid][fid]['bounding_box']
+        # transform all annotation data into numpy
+        activity = np.array(self.annotationData[sid][fid]['group_activity'])
+        action = np.array(self.annotationData[sid][fid]['action'])
+        bbox = np.array(self.annotationData[sid][fid]['bounding_box'])
+
+        # transform all data into torch
+        img = torch.from_numpy(img)
+        activity = torch.from_numpy(activity)
+        action = torch.from_numpy(action)
+        bbox = torch.from_numpy(bbox)
 
         return img, activity, action, bbox

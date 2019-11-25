@@ -4,4 +4,5 @@ cfg = config.Config()
 
 volleyballSet = volleyballDataset.VolleyballDataset(cfg)
 
-print(volleyballSet.__getitem__(1))
+c = volleyballSet.__getitem__(1)
+print(c[0][1][200])

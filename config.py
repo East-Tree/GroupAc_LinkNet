@@ -11,3 +11,12 @@ class Config(object):
 
         # data parameter
         self.imageSize = 720, 1280
+
+        # Backbone
+        self.backbone = 'inv3'
+        self.crop_size = 5, 5  # crop size of roi align
+        self.train_backbone = False  # if freeze the feature extraction part of network, True for stage 1, False for stage 2
+        self.out_size = 87, 157  # output feature map size of backbone
+        self.emb_features = 1056
+
+        self.num_features_boxes = 1024

@@ -1,6 +1,10 @@
 import volleyballDataset
 import config
+import pickle
+
 cfg = config.Config()
+
+a= pickle.load(open(cfg.dataPath + '/volleyball/tracks_normalized.pkl', 'rb'))
 
 volleyballSet = volleyballDataset.VolleyballDataset(cfg)
 

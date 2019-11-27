@@ -1,8 +1,12 @@
+import torch
+import torch.nn.functional as F
+
+
 def train1volleyball(data_loader, model, device, optimizer, epoch=0, cfg=None):
 
     for batch_data in data_loader:
         model.train()
-        model.apply(set_bn_eval)
+        # model.apply(set_bn_eval)
 
         # prepare batch data
         batch_data = [b.to(device=device) for b in batch_data]

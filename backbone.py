@@ -1,12 +1,15 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
+import math
 
 class MyInception_v3(nn.Module):
     def __init__(self, transform_input=False, pretrained=False):
         super(MyInception_v3, self).__init__()
         self.transform_input = transform_input
         inception = models.inception_v3(pretrained=pretrained)
+
+        self.feature_dim = 1056
 
         self.Conv2d_1a_3x3 = inception.Conv2d_1a_3x3
         self.Conv2d_2a_3x3 = inception.Conv2d_2a_3x3
@@ -66,3 +69,22 @@ class MyInception_v3(nn.Module):
         outputs.append(x)
 
         return outputs
+
+    def outputDim(self):
+
+        return self.feature_dim
+
+    def outputSize(self, height, weight):
+        def cal(x):
+            x = math.ceil((x-2)/2)
+            x = x - 2
+            x = math.ceil((x-2)/2)
+            x = x - 2
+            x = math.ceil((x - 2) / 2)
+
+            return x
+
+        H = cal(height)
+        W = cal(weight)
+
+        return H, W

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import config
+import utils
 
 import backbone
 from roi_align.roi_align import RoIAlign      # RoIAlign module
@@ -14,17 +15,21 @@ class selfNet(nn.Module):
     def __init__(self, cfg: config.Config):
         super(selfNet, self).__init__()
         self.cfg = cfg
-        NFB = self.cfg.num_features_boxes
-        D = self.cfg.emb_features
-        K = self.cfg.crop_size[0]
+        self.person_feature_dim = self.cfg.num_features_boxes
+        self.RoI_crop_size = self.cfg.crop_size[0]
+        self.actions_num = self.cfg.actions_num
+
+        # here determine the backbone net
+        self.backbone_net = backbone.MyInception_v3(pretrained=True)
+        self.backbone_dim = self.backbone_net.outputDim()
+        self.backbone_size = self.backbone_net.outputSize(*self.cfg.imageSize)
 
         self.roi_align = RoIAlign(*self.cfg.crop_size)
 
-        self.fc_emb = nn.Linear(K * K * D, NFB)
+        self.fc_emb = nn.Linear(self.RoI_crop_size * self.RoI_crop_size * self.backbone_dim, self.person_feature_dim)
         self.dropout_emb = nn.Dropout(p=self.cfg.train_dropout_prob)
 
-        self.fc_actions = nn.Linear(NFB, self.cfg.num_actions)
-        self.fc_activities = nn.Linear(NFB, self.cfg.num_activities)
+        self.fc_actions = nn.Linear(self.person_feature_dim, self.actions_num)
 
         for m in self.modules():  # network initial for linear layer
             if isinstance(m, nn.Linear):
@@ -33,10 +38,10 @@ class selfNet(nn.Module):
 
     def savemodel(self, filepath):
         state = {
-            'backbone_state_dict': self.backbone.state_dict(),
+            'backbone_state_dict': self.backbone_net.state_dict(),
             'fc_emb_state_dict': self.fc_emb.state_dict(),
             'fc_actions_state_dict': self.fc_actions.state_dict(),
-            'fc_activities_state_dict': self.fc_activities.state_dict()
+            # 'fc_activities_state_dict': self.fc_activities.state_dict()
         }
 
         torch.save(state, filepath)
@@ -54,24 +59,24 @@ class selfNet(nn.Module):
         images_in, boxes_in = batch_data
 
         # read config parameters
-        B = images_in.shape[0]
-        T = images_in.shape[1]
-        H, W = self.cfg.image_size
-        OH, OW = self.cfg.out_size
-        N = self.cfg.num_boxes
+        B = images_in.shape[0]  # batch size
+        N = int(boxes_in.shape[1])   # the number of person bbox
+        H, W = self.cfg.imageSize
+        OH, OW = self.backbone_size
         NFB = self.cfg.num_features_boxes
 
         # Reshape the input data
-        images_in_flat = torch.reshape(images_in, (B * T, 3, H, W))  # B*T, 3, H, W
-        boxes_in_flat = torch.reshape(boxes_in, (B * T * N, 4))  # B*T*N, 4
+        images_in_flat = torch.reshape(images_in, (B, 3, H, W))  # B*T, 3, H, W
+        boxes_in_flat = torch.reshape(boxes_in, (B * N, 4))  # B*T*N, 4
 
-        boxes_idx = [i * torch.ones(N, dtype=torch.int) for i in range(B * T)]
+        for i in range(B):
+            boxes_idx = i * torch.ones(N, dtype=torch.int)
         boxes_idx = torch.stack(boxes_idx).to(device=boxes_in.device)  # B*T, N
-        boxes_idx_flat = torch.reshape(boxes_idx, (B * T * N,))  # B*T*N,
+        boxes_idx_flat = torch.reshape(boxes_idx, (B * N,))  # B*T*N,
 
         # Use backbone to extract features of images_in
         # Pre-precess first
-        images_in_flat = prep_images(images_in_flat)
+        images_in_flat = utils.prep_images(images_in_flat)
 
         outputs = self.backbone(images_in_flat)
 

@@ -12,6 +12,10 @@ class Config(object):
         # data parameter
         self.imageSize = 720, 1280
 
+        # dataset parameter
+        self.actions_num = 0
+        self.activities_num = 0
+
         # Backbone
         self.backbone = 'inv3'
         self.crop_size = 5, 5  # crop size of roi align
@@ -20,3 +24,6 @@ class Config(object):
         self.emb_features = 1056
 
         self.num_features_boxes = 1024
+
+        # training parameter
+        self.train_dropout_prob = 0.3

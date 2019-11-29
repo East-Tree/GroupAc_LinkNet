@@ -1,6 +1,12 @@
 import torch
 import torch.nn.functional as F
 
+import volleyballDataset
+import config
+
+cfg = config.Config()
+dataset = volleyballDataset.VolleyballDataset(cfg)
+cfg.actions_num, cfg.activities_num = dataset.classCount()
 
 def train1volleyball(data_loader, model, device, optimizer, epoch=0, cfg=None):
 

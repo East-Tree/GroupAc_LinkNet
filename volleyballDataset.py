@@ -142,3 +142,7 @@ class VolleyballDataset(data.Dataset):
         bbox = torch.from_numpy(bbox)
 
         return img, activity, action, bbox
+
+    def classCount(self):
+
+        return self.NUM_ACTIONS, self.NUM_ACTIVITIES

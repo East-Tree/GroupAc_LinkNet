@@ -9,7 +9,7 @@ class MyInception_v3(nn.Module):
         self.transform_input = transform_input
         inception = models.inception_v3(pretrained=pretrained)
 
-        self.feature_dim = 1056
+
 
         self.Conv2d_1a_3x3 = inception.Conv2d_1a_3x3
         self.Conv2d_2a_3x3 = inception.Conv2d_2a_3x3
@@ -70,11 +70,13 @@ class MyInception_v3(nn.Module):
 
         return outputs
 
-    def outputDim(self):
+    @staticmethod
+    def outputDim():
 
-        return self.feature_dim
+        return 1056
 
-    def outputSize(self, height, weight):
+    @staticmethod
+    def outputSize(height, weight):
         def cal(x):
             x = math.ceil((x-2)/2)
             x = x - 2

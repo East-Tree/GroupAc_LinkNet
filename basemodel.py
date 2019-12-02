@@ -15,14 +15,14 @@ class selfNet(nn.Module):
     def __init__(self, cfg: config.Config):
         super(selfNet, self).__init__()
         self.cfg = cfg
-        self.person_feature_dim = self.cfg.num_features_boxes
+        self.person_feature_dim = self.cfg.individual_dim
         self.RoI_crop_size = self.cfg.crop_size[0]
         self.actions_num = self.cfg.actions_num
 
         # here determine the backbone net
-        self.backbone_net = backbone.MyInception_v3(pretrained=True)
-        self.backbone_dim = self.backbone_net.outputDim()
-        self.backbone_size = self.backbone_net.outputSize(*self.cfg.imageSize)
+        self.backbone_net = backbone.MyInception_v3(transform_input=False, pretrained=True)
+        self.backbone_dim = backbone.MyInception_v3.outputDim()
+        self.backbone_size = backbone.MyInception_v3.outputSize(*self.cfg.imageSize)
 
         self.roi_align = RoIAlign(*self.cfg.crop_size)
 
@@ -63,24 +63,24 @@ class selfNet(nn.Module):
         N = int(boxes_in.shape[1])   # the number of person bbox
         H, W = self.cfg.imageSize
         OH, OW = self.backbone_size
-        NFB = self.cfg.num_features_boxes
+        NFB = self.cfg.individual_dim
 
         # Reshape the input data
-        images_in_flat = torch.reshape(images_in, (B, 3, H, W))  # B*T, 3, H, W
-        boxes_in_flat = torch.reshape(boxes_in, (B * N, 4))  # B*T*N, 4
+        images_in_flat = torch.reshape(images_in, (B, 3, H, W))  # B, 3, H, W
+        boxes_in_flat = torch.reshape(boxes_in, (B * N, 4))  # B*N, 4
 
-        for i in range(B):
-            boxes_idx = i * torch.ones(N, dtype=torch.int)
+        boxes_idx=[i * torch.ones(N, dtype=torch.int) for i in range(B) ]
         boxes_idx = torch.stack(boxes_idx).to(device=boxes_in.device)  # B*T, N
-        boxes_idx_flat = torch.reshape(boxes_idx, (B * N,))  # B*T*N,
+        boxes_idx_flat = torch.reshape(boxes_idx, (B * N,))  # B*N,
 
         # Use backbone to extract features of images_in
-        # Pre-precess first
+        # Pre-precess first  normalized to [-1,1]
         images_in_flat = utils.prep_images(images_in_flat)
 
         outputs = self.backbone(images_in_flat)
 
         # Build multiscale features
+        # normalize all feature map into same scale
         features_multiscale = []
         for features in outputs:
             if features.shape[2:4] != torch.Size([OH, OW]):
@@ -92,35 +92,25 @@ class selfNet(nn.Module):
         # ActNet
         boxes_in_flat.requires_grad = False
         boxes_idx_flat.requires_grad = False
-        #         features_multiscale.requires_grad=False
+        #  features_multiscale.requires_grad=False
 
         # RoI Align
         boxes_features = self.roi_align(features_multiscale,
                                         boxes_in_flat,
-                                        boxes_idx_flat)  # B*T*N, D, K, K,
+                                        boxes_idx_flat)  # B*N, D, K, K,
 
-        boxes_features = boxes_features.reshape(B * T * N, -1)  # B*T*N, D*K*K
+        boxes_features = boxes_features.reshape(B * N, -1)  # B*N, D*K*K
 
         # Embedding to hidden state
-        boxes_features = self.fc_emb(boxes_features)  # B*T*N, NFB
+        boxes_features = self.fc_emb(boxes_features)  # B*N, NFB
         boxes_features = F.relu(boxes_features)
         boxes_features = self.dropout_emb(boxes_features)
 
-        boxes_states = boxes_features.reshape(B, T, N, NFB)
+        boxes_states = boxes_features.reshape(B, N, NFB)
 
         # Predict actions
-        boxes_states_flat = boxes_states.reshape(-1, NFB)  # B*T*N, NFB
+        boxes_states_flat = boxes_states.reshape(-1, NFB)  # B*N, NFB
 
-        actions_scores = self.fc_actions(boxes_states_flat)  # B*T*N, actn_num
+        actions_scores = self.fc_actions(boxes_states_flat)  # B*N, actions_num
 
-        # Predict activities
-        boxes_states_pooled, _ = torch.max(boxes_states, dim=2)  # B, T, NFB
-        boxes_states_pooled_flat = boxes_states_pooled.reshape(-1, NFB)  # B*T, NFB
-
-        activities_scores = self.fc_activities(boxes_states_pooled_flat)  # B*T, acty_num
-
-        if T != 1:
-            actions_scores = actions_scores.reshape(B, T, N, -1).mean(dim=1).reshape(B * N, -1)
-            activities_scores = activities_scores.reshape(B, T, -1).mean(dim=1)
-
-        return actions_scores, activities_scores
+        return actions_scores

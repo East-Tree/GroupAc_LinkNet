@@ -23,7 +23,7 @@ class Config(object):
         self.out_size = 87, 157  # output feature map size of backbone
         self.emb_features = 1056
 
-        self.num_features_boxes = 1024
+        self.individual_dim = 1024
 
         # training parameter
         self.train_dropout_prob = 0.3

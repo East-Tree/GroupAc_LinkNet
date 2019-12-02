@@ -17,16 +17,12 @@ def train1volleyball(data_loader, model, device, optimizer, epoch=0, cfg=None):
         # prepare batch data
         batch_data = [b.to(device=device) for b in batch_data]
         batch_size = batch_data[0].shape[0]
-        num_frames = batch_data[0].shape[1]
 
-        actions_in = batch_data[2].reshape((batch_size, num_frames, cfg.num_boxes))
-        activities_in = batch_data[3].reshape((batch_size, num_frames))
-
-        actions_in = actions_in[:, 0, :].reshape((batch_size * cfg.num_boxes,))
-        activities_in = activities_in[:, 0].reshape((batch_size,))
+        # reshape the action label into (B*N)
+        actions_in = batch_data[2].reshape(-1)
 
         # forward
-        actions_scores, activities_scores = model((batch_data[0], batch_data[1]))
+        actions_scores = model((batch_data[0], batch_data[3]))
 
         # Predict actions
         actions_weights = torch.tensor(cfg.actions_weights).to(device=device)
@@ -34,14 +30,9 @@ def train1volleyball(data_loader, model, device, optimizer, epoch=0, cfg=None):
         actions_labels = torch.argmax(actions_scores, dim=1)
         actions_correct = torch.sum(torch.eq(actions_labels.int(), actions_in.int()).float())
 
-        # Predict activities
-        activities_loss = F.cross_entropy(activities_scores, activities_in)
-        activities_labels = torch.argmax(activities_scores, dim=1)
-        activities_correct = torch.sum(torch.eq(activities_labels.int(), activities_in.int()).float())
 
         # Get accuracy
         actions_accuracy = actions_correct.item() / actions_scores.shape[0]
-        activities_accuracy = activities_correct.item() / activities_scores.shape[0]
 
         actions_meter.update(actions_accuracy, actions_scores.shape[0])
         activities_meter.update(activities_accuracy, activities_scores.shape[0])

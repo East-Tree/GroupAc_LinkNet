@@ -4,7 +4,7 @@ import pickle
 import math
 
 
-cfg = config.Config()
+cfg = config.Config1()
 
 
 volleyballSet = volleyballDataset.VolleyballDataset(cfg)

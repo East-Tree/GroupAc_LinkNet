@@ -1,14 +1,21 @@
 import torch
 import torch.nn.functional as F
+from utils import *
 
-import volleyballDataset
 import config
 
-cfg = config.Config()
-dataset = volleyballDataset.VolleyballDataset(cfg)
-cfg.actions_num, cfg.activities_num = dataset.classCount()
 
-def train1volleyball(data_loader, model, device, optimizer, epoch=0, cfg=None):
+def adjust_lr(optimizer, new_lr):
+    print('change learning rate:',new_lr)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = new_lr
+
+
+def trainVolleyballEpoch(data_loader, model, device, optimizer, epoch=0, cfg=None):
+
+    actions_meter = AverageMeter()
+    loss_meter = AverageMeter()
+    epoch_timer = Timer()
 
     for batch_data in data_loader:
         model.train()
@@ -30,15 +37,13 @@ def train1volleyball(data_loader, model, device, optimizer, epoch=0, cfg=None):
         actions_labels = torch.argmax(actions_scores, dim=1)
         actions_correct = torch.sum(torch.eq(actions_labels.int(), actions_in.int()).float())
 
-
         # Get accuracy
         actions_accuracy = actions_correct.item() / actions_scores.shape[0]
 
         actions_meter.update(actions_accuracy, actions_scores.shape[0])
-        activities_meter.update(activities_accuracy, activities_scores.shape[0])
 
         # Total loss
-        total_loss = activities_loss + cfg.actions_loss_weight * actions_loss
+        total_loss = cfg.actions_loss_weight * actions_loss
         loss_meter.update(total_loss.item(), batch_size)
 
         # Optim
@@ -50,7 +55,6 @@ def train1volleyball(data_loader, model, device, optimizer, epoch=0, cfg=None):
         'time': epoch_timer.timeit(),
         'epoch': epoch,
         'loss': loss_meter.avg,
-        'activities_acc': activities_meter.avg * 100,
         'actions_acc': actions_meter.avg * 100
     }
 

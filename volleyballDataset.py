@@ -1,4 +1,3 @@
-import config
 
 import numpy as np
 import torch
@@ -10,7 +9,7 @@ from PIL import Image
 
 # define the volleyball dataset class
 class VolleyballDataset(data.Dataset):
-    def __init__(self, cfg: config.Config):
+    def __init__(self, cfg):
         self.cfg = cfg
         self.datasetPath = cfg.dataPath + '/volleyball'
         self.frameList = list(range(50)) #generate reading list for volleyball dataset

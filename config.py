@@ -1,13 +1,17 @@
 import os
-import sys
+import time
 
-class Config(object):
+
+class Config1(object):
     """a class to storage the basic parameter"""
 
     def __init__(self):
-        #work path
+        # work path
         self.workPath = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN'
         self.dataPath = self.workPath + '/data'
+        self.resultPath = self.workPath + '/result'
+        self.outputPath = None
+        self.logPath = None
 
         # data parameter
         self.imageSize = 720, 1280
@@ -27,3 +31,28 @@ class Config(object):
 
         # training parameter
         self.train_dropout_prob = 0.3
+        self.actions_weights = None  # weight for each actions categories
+
+        self.action_loss_weight = 1  # weight for actions in loss fuction
+
+        self.initial()
+
+    def initial(self):
+
+        # check the existence of result dir
+        if not os.path.exists(self.resultPath):
+            os.mkdir(self.resultPath)
+
+        # build output dir
+        date = time.strftime("%Y%m%d", time.localtime())
+        date = date[2:]
+        for i in range(100):
+            outputPath0 = self.resultPath + "/" + date + str(i)
+            if os.path.exists(outputPath0):
+                self.outputPath = outputPath0
+                print("The output path is %s" % self.outputPath)
+                break
+
+            assert False, "not enough dir index today, you silly B"
+        print("The output result will be saved in %s" % self.resultPath)
+        self.logPath = self.resultPath + "/logger.txt"

@@ -1,6 +1,6 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 import config
 import utils
 
@@ -12,7 +12,7 @@ class selfNet(nn.Module):
     main module of base model for the volleyball
     """
 
-    def __init__(self, cfg: config.Config):
+    def __init__(self, cfg: config.Config1):
         super(selfNet, self).__init__()
         self.cfg = cfg
         self.person_feature_dim = self.cfg.individual_dim

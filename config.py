@@ -11,7 +11,6 @@ class Config1(object):
         self.dataPath = self.workPath + '/data'
         self.resultPath = self.workPath + '/result'
         self.outputPath = None
-        self.logPath = None
 
         # data parameter
         self.imageSize = 720, 1280
@@ -19,6 +18,8 @@ class Config1(object):
         # dataset parameter
         self.actions_num = 0
         self.activities_num = 0
+        self.dataset_splitrate = 0.2
+        self.random_split = False
 
         # Backbone
         self.backbone = 'inv3'
@@ -30,10 +31,14 @@ class Config1(object):
         self.individual_dim = 1024
 
         # training parameter
+        self.use_gpu = True
+        self.batch_size = 4
         self.train_dropout_prob = 0.3
-        self.actions_weights = None  # weight for each actions categories
-
+        self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]  # weight for each actions categories
         self.action_loss_weight = 1  # weight for actions in loss fuction
+
+        # testing parameter
+        self.test_batch_size = 4
 
         self.initial()
 
@@ -46,13 +51,12 @@ class Config1(object):
         # build output dir
         date = time.strftime("%Y%m%d", time.localtime())
         date = date[2:]
-        for i in range(100):
-            outputPath0 = self.resultPath + "/" + date + str(i)
-            if os.path.exists(outputPath0):
+        for i in range(101):
+            outputPath0 = self.resultPath + "/" + date + '-' + "%02d" % i
+            if not os.path.exists(outputPath0):
                 self.outputPath = outputPath0
+                os.mkdir(self.outputPath)
                 print("The output path is %s" % self.outputPath)
                 break
-
-            assert False, "not enough dir index today, you silly B"
-        print("The output result will be saved in %s" % self.resultPath)
-        self.logPath = self.resultPath + "/logger.txt"
+            assert i != 100, "not enough dir index today, you silly B"
+        print("The output result will be saved in %s" % self.outputPath)

@@ -5,7 +5,7 @@ import config
 import utils
 
 import backbone
-from roi_align.roi_align import RoIAlign      # RoIAlign module
+from torchvision import ops   # RoIAlign module
 
 class selfNet(nn.Module):
     """

@@ -2,12 +2,13 @@ import volleyballDataset
 import config
 import pickle
 import math
-
+from torch.utils import data
 
 cfg = config.Config1()
 
 
 volleyballSet = volleyballDataset.VolleyballDataset(cfg)
 
-c = volleyballSet.__getitem__(1)
-print(c[0][1][200])
+c = data.DataLoader(volleyballSet, batch_size=4)
+for da in c:
+    print(da[3].size())

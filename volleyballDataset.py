@@ -7,6 +7,20 @@ from torch.utils import data
 from PIL import Image
 
 
+# a new a collate fun for this dataset, because each sampling contain different shape tensor
+def new_collate(batch):
+    # [sample1, sample2, ...]
+    # (img, activities, actions, bbox)
+    image = [item[0] for item in batch]
+    activities = [item[1] for item in batch]
+    actions = [item[2] for item in batch]
+    bbox = [item[3] for item in batch]
+
+    # return:
+    # [image, activities, actions, bbox]
+    # image:[sample1, sample2, ...]
+    return [image, activities, actions, bbox]
+
 # define the volleyball dataset class
 class VolleyballDataset(data.Dataset):
     def __init__(self, cfg):

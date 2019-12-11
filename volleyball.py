@@ -11,7 +11,7 @@ def adjust_lr(optimizer, new_lr):
         param_group['lr'] = new_lr
 
 
-def trainVolleyballEpoch(data_loader, model, device, optimizer, epoch=0, cfg=None):
+def trainVolleyballEpoch(data_loader, model, optimizer, device, epoch=0, cfg=None):
 
     actions_meter = AverageMeter()
     loss_meter = AverageMeter()
@@ -21,15 +21,13 @@ def trainVolleyballEpoch(data_loader, model, device, optimizer, epoch=0, cfg=Non
         model.train()
         # model.apply(set_bn_eval)
 
-        # prepare batch data
-        batch_data = [b.to(device=device) for b in batch_data]
-        batch_size = batch_data[0].shape[0]
+        batch_size = len(batch_data[0])
 
-        # reshape the action label into (B*N)
+        # reshape the action label into tensor(B*N)
         actions_in = batch_data[2].reshape(-1)
 
         # forward
-        actions_scores = model((batch_data[0], batch_data[3]))
+        actions_scores = model((batch_data[0], batch_data[3]))  # tensor(B*N, actions_num)
 
         # Predict actions
         actions_weights = torch.tensor(cfg.actions_weights).to(device=device)
@@ -40,7 +38,7 @@ def trainVolleyballEpoch(data_loader, model, device, optimizer, epoch=0, cfg=Non
         # Get accuracy
         actions_accuracy = actions_correct.item() / actions_scores.shape[0]
 
-        actions_meter.update(actions_accuracy, actions_scores.shape[0])
+        actions_meter.update(actions_accuracy, batch_size)
 
         # Total loss
         total_loss = cfg.actions_loss_weight * actions_loss

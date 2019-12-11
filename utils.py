@@ -117,7 +117,6 @@ class Logger(object):
             f.write(message)
 
 
-
 class AverageMeter(object):
     """
     Computes the average value

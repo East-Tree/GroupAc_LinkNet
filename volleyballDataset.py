@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 import torchvision.transforms.functional as Tfunc
@@ -23,14 +22,14 @@ def new_collate(batch):
 
 # define the volleyball dataset class
 class VolleyballDataset(data.Dataset):
-    def __init__(self, cfg):
-        self.cfg = cfg
-        self.datasetPath = cfg.dataPath + '/volleyball'
+    def __init__(self, cfg_dataPath, cfg_imagesize=(720,1280)):
+        self.datasetPath = cfg_dataPath + '/volleyball'
         self.frameList = list(range(50)) #generate reading list for volleyball dataset
 
         # according to official document, the label bbox is corresponding to (720,1280)
-        self.scaleW = float(self.cfg.imageSize[1]/1280)
-        self.scaleH = float(self.cfg.imageSize[0]/720)
+        self.scaleW = float(cfg_imagesize[1]/1280)
+        self.scaleH = float(cfg_imagesize[0]/720)
+        self.imagesize = cfg_imagesize
 
         self.annotationData = self.readAnnotation()
         self.allFrames = self.readAllFrames()
@@ -137,7 +136,7 @@ class VolleyballDataset(data.Dataset):
         sid, fid = frameIndex
         framePath = self.datasetPath + '/%d/%d/%d.jpg' % (sid, fid, fid)
         img = Image.open(framePath)
-        img = Tfunc.resize(img, self.cfg.imageSize)
+        img = Tfunc.resize(img, self.imagesize)
         img = np.array(img)
 
         # H, W, 3 -> 3, H, W

@@ -1,7 +1,6 @@
 from backbone import *
 from utils import *
 
-import backbone
 from torchvision import ops  # RoIAlign module
 
 
@@ -11,6 +10,7 @@ class SelfNet(nn.Module):
     """
 
     def __init__(self, cfg_imagesize, cfg_roisize, cfg_actions_num, device=None, **arch_feature):
+
         super(SelfNet, self).__init__()
         self.imagesize = cfg_imagesize
         self.RoI_crop_size = cfg_roisize
@@ -21,9 +21,9 @@ class SelfNet(nn.Module):
         self.arch_para = self.para_align(arch_feature)
 
         # here determine the backbone net
-        self.backbone_net = backbone.MyInception_v3(transform_input=False, pretrained=True)
-        self.backbone_dim = backbone.MyInception_v3.outputDim()
-        self.backbone_size = backbone.MyInception_v3.outputSize(*self.imagesize)
+        self.backbone_net = MyInception_v3(transform_input=False, pretrained=False)
+        self.backbone_dim = MyInception_v3.outputDim()
+        self.backbone_size = MyInception_v3.outputSize(*self.imagesize)
 
         self.fc_emb = nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,
                                 self.arch_para['person_fea_dim'])
@@ -76,6 +76,8 @@ class SelfNet(nn.Module):
         D = self.backbone_dim
         H, W = self.imagesize
         OH, OW = self.backbone_size
+        Hr = OH/H
+        Wr = OW/W
         NFB = self.arch_para['person_fea_dim']
 
         # Reshape the input data
@@ -86,21 +88,22 @@ class SelfNet(nn.Module):
         boxes_in_index = []
         for i in range(B):
             box_num = boxes_in_flat[i].size()[0]
-            boxes_in_index.append([[i]] * box_num)
+            boxes_in_index.append(torch.tensor([[i]] * box_num))
         boxes_in_flat = torch.cat(boxes_in_flat, dim=0)
-        boxes_in_index = torch.tensor(boxes_in_index)
+        boxes_in_index = torch.cat(boxes_in_index,dim=0)
         #    cat flat and index together
         boxes_in_flat = torch.cat([boxes_in_index, boxes_in_flat], dim=1)
         #    convert the origin coordinate(rate) into backbone feature scale coordinate(absolute int)
-        operator = torch.tensor([1, OW, OH, OW, OH])
-        boxes_in_flat = boxes_in_flat * operator
+        operator = torch.tensor([1, Wr, Hr, Wr, Hr])
+        boxes_in_flat = boxes_in_flat.float() * operator
         boxes_in_flat = boxes_in_flat.int().to(device=self.device)
+        boxes_in_flat = boxes_in_flat.float()
 
         # Use backbone to extract features of images_in
         # Pre-precess first  normalized to [-1,1]
-        images_in_flat = prep_images(images_in_flat)
+        images_in_flat = prep_images(images_in_flat.float())
 
-        outputs = self.backbone(images_in_flat)
+        outputs = self.backbone_net(images_in_flat)
 
         # Build multiscale features
         # normalize all feature map into same scale
@@ -117,7 +120,7 @@ class SelfNet(nn.Module):
         #  features_multiscale.requires_grad=False
 
         # RoI Align
-        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, K)  # B*N, D, K, K,
+        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, (K,K))  # B*N, D, K, K,
 
         boxes_features = boxes_features.reshape(-1, D * K * K)  # B*N, D*K*K
         boxes_features.to(device=self.device)

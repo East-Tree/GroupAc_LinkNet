@@ -103,6 +103,12 @@ def show_epoch_info(phase, log_path, info):
         info['activities_acc'], info['loss'], info['time']))
 
 
+def adjust_lr(optimizer, new_lr, logger):
+    logger.fPrint('change learning rate:', new_lr)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = new_lr
+
+
 class Logger(object):
     def __init__(self, path):
         if os.path.exists(path):
@@ -114,7 +120,8 @@ class Logger(object):
 
     def fPrint(self, message):
         with open(self.logPath, 'a') as f:
-            f.write(message)
+            f.write(str(message))
+        print(message)
 
 
 class AverageMeter(object):

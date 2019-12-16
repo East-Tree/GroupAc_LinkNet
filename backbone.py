@@ -4,11 +4,10 @@ import torchvision.models as models
 import math
 
 class MyInception_v3(nn.Module):
-    def __init__(self, transform_input=False, pretrained=False):
+    def __init__(self, transform_input=False, pretrained=True):
         super(MyInception_v3, self).__init__()
         self.transform_input = transform_input
         inception = models.inception_v3(pretrained=pretrained)
-
 
 
         self.Conv2d_1a_3x3 = inception.Conv2d_1a_3x3

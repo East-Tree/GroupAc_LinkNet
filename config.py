@@ -32,13 +32,19 @@ class Config1(object):
 
         # training parameter
         self.use_gpu = True
-        self.batch_size = 4
+        self.batch_size = 8
         self.train_dropout_prob = 0.3
         self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]  # weight for each actions categories
-        self.action_loss_weight = 1  # weight for actions in loss fuction
+        self.actions_loss_weight = 1  # weight for actions in loss function
+        self.max_epoch = 150
+        self.lr_plan = {41: 1e-4, 81: 5e-5, 121: 1e-5}
 
         # testing parameter
+        self.test_interval_epoch = 10
         self.test_batch_size = 4
+        self.train_learning_rate = 2e-4
+        self.weight_decay = 0
+
 
         self.initial()
 

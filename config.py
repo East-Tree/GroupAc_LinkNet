@@ -42,7 +42,7 @@ class Config1(object):
         # testing parameter
         self.test_interval_epoch = 10
         self.test_batch_size = 4
-        self.train_learning_rate = 2e-4
+        self.train_learning_rate = 1e-3
         self.weight_decay = 0
 
 

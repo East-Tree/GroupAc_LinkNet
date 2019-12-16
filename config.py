@@ -18,7 +18,7 @@ class Config1(object):
         # dataset parameter
         self.actions_num = 0
         self.activities_num = 0
-        self.dataset_splitrate = 0.2
+        self.dataset_splitrate = 0.8
         self.random_split = False
 
         # Backbone

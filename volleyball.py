@@ -127,12 +127,12 @@ class VolleyballEpoch():
 
         self.total_loss = None
 
-        self.main(mode)
 
-    def main(self,mode):
-        if mode == 'train':
+
+    def main(self):
+        if self.mode == 'train':
             print("Training in epoch %s" % self.epoch)
-            for batch_data in self.data_loader:
+            for batch_data in tqdm(self.data_loader):
                 self.base(batch_data)
 
                 # Optim
@@ -140,31 +140,31 @@ class VolleyballEpoch():
                 self.total_loss.backward()
                 self.optimizer.step()
             info = {
-                'mode': mode,
+                'mode': self.mode,
                 'time': self.epoch_timer.timeit(),
                 'epoch': self.epoch,
                 'loss': self.loss_meter.avg,
                 'actions_acc': self.actions_meter.avg * 100,
-                # 'actions_each _acc': actions_each_meter.avg * 100
+                'actions_each _acc': self.actions_each_meter.avg * 100
             }
-        elif mode == 'test':
+        elif self.mode == 'test':
             print("Testing in test dataset")
             with torch.no_grad():
-                for batch_data in self.data_loader:
+                for batch_data in tqdm(self.data_loader):
                     self.base(batch_data)
             info = {
-                'mode': mode,
+                'mode': self.mode,
                 'time': self.epoch_timer.timeit(),
                 'loss': self.loss_meter.avg,
                 'actions_acc': self.actions_meter.avg * 100,
-                # 'actions_each _acc': actions_each_meter.avg * 100
+                'actions_each _acc': self.actions_each_meter.avg * 100
             }
         else:
             assert False, "mode name incorrect"
 
         return info
 
-    def base(self,batch_data):
+    def base(self, batch_data):
 
         # model.apply(set_bn_eval)
 
@@ -182,8 +182,11 @@ class VolleyballEpoch():
         actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
         actions_labels = torch.argmax(actions_scores, dim=1)
         actions_correct = torch.eq(actions_labels.int(), actions_in.int()).float()
+        actions_each_correct = torch.zeros(self.cfg.actions_num)
+        for i in range(actions_correct.size()[0]):
+            actions_each_correct[actions_correct[i]] += 1
         actions_correct_sum = torch.sum(actions_correct)
-        #actions_each_meter.update(actions_correct, batch_size)
+        self.actions_each_meter.update(actions_each_correct, batch_size)
 
         # Get accuracy
         actions_accuracy = actions_correct_sum.item() / actions_scores.shape[0]

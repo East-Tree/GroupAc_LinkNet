@@ -75,15 +75,18 @@ if __name__ == '__main__':
 
         #  each epoch in the iteration
         model.train()
-        train_result_info = volleyball.VolleyballEpoch('train',train_loader,model,device,cfg,optimizer,epoch)
+        train_result_info = volleyball.VolleyballEpoch('train',train_loader,model,device,cfg,optimizer,epoch).main()
         log.fPrint(train_result_info)
         all_info.append(train_result_info)
+
 
         #  test in each interval times
         if epoch % cfg.test_interval_epoch == 0:
             model.train(False)
-            test_result_info = volleyball.VolleyballEpoch('test',test_loader,model,device,cfg)
+            test_result_info = volleyball.VolleyballEpoch('test',test_loader,model,device,cfg).main()
             log.fPrint(test_result_info)
+            filepath = cfg.outputPath + '/stage%d_epoch%d_%.2f%%.pth' % (1, epoch, test_result_info['actions_acc'])
+            model.savemodel(filepath)
 
         if epoch > 10:
             if abs(all_info[epoch]['loss'] - all_info[epoch-1]['loss']) < cfg.break_line:

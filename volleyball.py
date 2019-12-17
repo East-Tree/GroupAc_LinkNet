@@ -181,11 +181,15 @@ class VolleyballEpoch():
         actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
         actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
         actions_labels = torch.argmax(actions_scores, dim=1)
-        actions_correct = torch.eq(actions_labels.int(), actions_in.int()).float()
-        actions_each_correct = torch.zeros(self.cfg.actions_num)
+        actions_in = actions_in.int()
+        actions_correct = torch.eq(actions_labels.int(), actions_in)
+        actions_each_correct = torch.zeros(self.cfg.actions_num,dtype=torch.float)
+        actions_each_all = torch.zeros(self.cfg.actions_num,dtype=torch.float)
         for i in range(actions_correct.size()[0]):
             actions_each_correct[actions_correct[i]] += 1
-        actions_correct_sum = torch.sum(actions_correct)
+            actions_each_all[actions_in[i]] += 1
+        actions_each_correct = actions_each_correct / actions_each_all
+        actions_correct_sum = torch.sum(actions_correct.float())
         self.actions_each_meter.update(actions_each_correct, batch_size)
 
         # Get accuracy

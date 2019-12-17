@@ -161,21 +161,22 @@ class SelfNet2(nn.Module):
         # embedding sequence
         self.mod_embed = nn.Sequential(
             nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,self.arch_para['person_fea_dim']),
-            nn.ReLU(),
-            nn.Dropout(p=self.arch_para['dropout_prob'])
+            nn.Sigmoid(),
+            nn.Dropout(p=self.arch_para['dropout_prob']),
+            nn.BatchNorm1d(self.arch_para['person_fea_dim']),
         )
 
         # state sequence
         self.mod_state = nn.Sequential(
             nn.Linear(self.arch_para['person_fea_dim'],self.arch_para['state_fea_dim']),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Dropout(p=self.arch_para['dropout_prob'])
         )
 
         # action sequence
         self.mod_actions = nn.Sequential(
             nn.Linear(self.arch_para['state_fea_dim'], self.actions_num),
-            nn.ReLU()
+            nn.LeakyReLU()
         )
 
         for m in self.modules():  # network initial for linear layer
@@ -197,8 +198,9 @@ class SelfNet2(nn.Module):
     def savemodel(self, filepath):
         state = {
             'backbone_state_dict': self.backbone_net.state_dict(),
-            'fc_emb_state_dict': self.fc_emb.state_dict(),
-            'fc_actions_state_dict': self.fc_actions.state_dict(),
+            'mod_embed_state_dict': self.mod_embed.state_dict(),
+            'mod_state_state_dict': self.mod_state.state_dict(),
+            'mod_actions_state_dict': self.mod_actions.state_dict(),
             # 'fc_activities_state_dict': self.fc_activities.state_dict()
         }
 
@@ -273,14 +275,14 @@ class SelfNet2(nn.Module):
         boxes_features = boxes_features.reshape(-1, D * K * K)  # B*N, D*K*K
         boxes_features.to(device=self.device)
 
-        # Embedding to hidden state
-        boxes_features = self.fc_emb(boxes_features)  # B*N, NFB
-        boxes_features = F.relu(boxes_features)
-        boxes_features = self.dropout_emb(boxes_features)
+        # Embedding to feature
+        self_features = self.mod_embed(boxes_features)  # B*N, NFB
+        # self states
+        self_states = self.mod_state(self_features)  # B*N, state_feature_dim
 
         # Predict actions
         # boxes_states_flat = boxes_features.reshape(-1, NFB)  # B*N, NFB
 
-        actions_scores = self.fc_actions(boxes_features)  # B*N, actions_num
+        actions_scores = self.mod_actions(self_states)  # B*N, actions_num
 
         return actions_scores

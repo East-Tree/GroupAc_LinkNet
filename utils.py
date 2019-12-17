@@ -104,9 +104,14 @@ def show_epoch_info(phase, log_path, info):
 
 
 def adjust_lr(optimizer, new_lr, logger):
-    logger.fPrint('change learning rate:', new_lr)
+    logger.fPrint('change learning rate: %s' % new_lr)
     for param_group in optimizer.param_groups:
         param_group['lr'] = new_lr
+
+def label_gather(cate_size, obj_tensor, res_tensor):
+    ob = torch.zeros(cate_size)
+    tensor = obj_tensor*res_tensor
+
 
 
 class Logger(object):
@@ -114,15 +119,17 @@ class Logger(object):
         if os.path.exists(path):
             self.logPath = path + '/Logger.txt'
             with open(self.logPath, 'w') as f:
-                f.write("the logger file have been created")
+                f.write("the logger file have been created"+'\n')
         else:
             assert False, "can not find logger, you silly B"
 
     def fPrint(self, message):
         with open(self.logPath, 'a') as f:
-            f.write(str(message))
+            f.write(str(message)+'\n')
         print(message)
 
+    def getPath(self):
+        return self.logPath
 
 class AverageMeter(object):
     """

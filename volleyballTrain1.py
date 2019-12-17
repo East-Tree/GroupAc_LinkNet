@@ -16,6 +16,7 @@ if __name__ == '__main__':
     cfg = config.Config1()
     # create logger object
     log = utils.Logger(cfg.outputPath)
+    log.fPrint(introduce)
     # device state
     if cfg.use_gpu and torch.cuda.is_available():
         device = torch.device('cuda')
@@ -52,16 +53,22 @@ if __name__ == '__main__':
     train_loader = data.DataLoader(trainDataset,collate_fn=volleyballDataset.new_collate, **params)
     test_loader = data.DataLoader(testDataset,collate_fn=volleyballDataset.new_collate, **params)
     #    build model
-    model = SelfNet(cfg.imageSize, cfg.crop_size, cfg.actions_num, device)  # type: SelfNet
+    arch_para = {
+        'person_fea_dim': cfg.individual_dim,
+        'state_fea_dim': cfg.state_dim,
+        'dropout_prob': cfg.train_dropout_prob
+    }
+    model = SelfNet2(cfg.imageSize, cfg.crop_size, cfg.actions_num, device,**arch_para)  # type: SelfNet2
     model.to(device=device)
     model.train()
-
+    log.fPrint(model)
     a = 1
     #    optimizer implement
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.train_learning_rate,
                            weight_decay=cfg.weight_decay)
     #    begin training
     start_epoch = 1
+    all_info = []
     for epoch in range(start_epoch + cfg.max_epoch):
         if epoch in cfg.lr_plan:
             adjust_lr(optimizer, cfg.lr_plan[epoch], log)
@@ -70,10 +77,16 @@ if __name__ == '__main__':
         model.train()
         train_result_info = volleyball.VolleyballEpoch('train',train_loader,model,device,cfg,optimizer,epoch)
         log.fPrint(train_result_info)
+        all_info.append(train_result_info)
 
         #  test in each interval times
         if epoch % cfg.test_interval_epoch == 0:
             model.train(False)
             test_result_info = volleyball.VolleyballEpoch('test',test_loader,model,device,cfg)
             log.fPrint(test_result_info)
+
+        if epoch > 10:
+            if abs(all_info[epoch]['loss'] - all_info[epoch-1]['loss']) < cfg.break_line:
+                break
+    model.savemodel(log.getPath())
 

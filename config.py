@@ -28,22 +28,27 @@ class Config1(object):
         self.out_size = 87, 157  # output feature map size of backbone
         self.emb_features = 1056
 
+        # model parameter
         self.individual_dim = 1024
+        self.state_dim = 512
 
         # training parameter
         self.use_gpu = True
         self.batch_size = 8
-        self.train_dropout_prob = 0.3
-        self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]  # weight for each actions categories
+        self.train_dropout_prob = 0.5
+        #self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]  # weight for each actions categories
+        self.actions_weights = [1., 1., 2., 3., 1., 2., 2., 0.2, 1.]
         self.actions_loss_weight = 1  # weight for actions in loss function
-        self.max_epoch = 150
-        self.lr_plan = {41: 1e-4, 81: 5e-5, 121: 1e-5}
+        self.max_epoch = 20
+        self.lr_plan = {5: 1e-4, 10: 2e-5, 20: 1e-5}
+        self.train_learning_rate = 2e-4
+        self.weight_decay = 0.05
+        self.break_line = 1e-4
 
         # testing parameter
-        self.test_interval_epoch = 10
+        self.test_interval_epoch = 5
         self.test_batch_size = 4
-        self.train_learning_rate = 1e-3
-        self.weight_decay = 0
+
 
 
         self.initial()

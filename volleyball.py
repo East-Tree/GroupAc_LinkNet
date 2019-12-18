@@ -12,102 +12,6 @@ def adjust_lr(optimizer, new_lr):
         param_group['lr'] = new_lr
 
 
-def VolleyballEpoch1(mode, data_loader, model, device, cfg=None, optimizer=None, epoch=0):
-
-    actions_meter = AverageMeter()
-    actions_each_meter = AverageMeter()
-    loss_meter = AverageMeter()
-    epoch_timer = Timer()
-
-    def base(data_loader, model, device, cfg=None):
-
-        # model.apply(set_bn_eval)
-
-        batch_size = len(batch_data[0])
-
-        # reshape the action label into tensor(B*N)
-        actions_in = torch.cat(batch_data[2],dim=0)
-        actions_in = actions_in.reshape(-1).to(device=device)
-
-        # forward
-        actions_scores = model((batch_data[0], batch_data[3]))  # tensor(B*N, actions_num)
-
-        # Predict actions
-        actions_weights = torch.tensor(cfg.actions_weights).to(device=device)
-        actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
-        actions_labels = torch.argmax(actions_scores, dim=1)
-        actions_correct = torch.eq(actions_labels.int(), actions_in.int()).float()
-        actions_correct_sum = torch.sum(actions_correct)
-        #actions_each_meter.update(actions_correct, batch_size)
-
-        # Get accuracy
-        actions_accuracy = actions_correct_sum.item() / actions_scores.shape[0]
-
-        actions_meter.update(actions_accuracy, batch_size)
-
-        # Total loss
-        total_loss = cfg.actions_loss_weight * actions_loss
-        loss_meter.update(total_loss.item(), batch_size)
-
-    if mode == 'train':
-        print("Training in epoch %s" % epoch)
-        for batch_data in tqdm(data_loader):
-            base(data_loader, model,device,cfg)
-
-            # Optim
-            optimizer.zero_grad()
-            total_loss.backward()
-            optimizer.step()
-        info = {
-            'mode': mode,
-            'time': epoch_timer.timeit(),
-            'epoch': epoch,
-            'loss': loss_meter.avg,
-            'actions_acc': actions_meter.avg * 100,
-            #'actions_each _acc': actions_each_meter.avg * 100
-        }
-    elif mode == 'test':
-        print("Testing in test dataset")
-        with torch.no_grad():
-            for batch_data in tqdm(data_loader):
-                # model.apply(set_bn_eval)
-
-                batch_size = len(batch_data[0])
-
-                # reshape the action label into tensor(B*N)
-                actions_in = torch.cat(batch_data[2], dim=0)
-                actions_in = actions_in.reshape(-1).to(device=device)
-
-                # forward
-                actions_scores = model((batch_data[0], batch_data[3]))  # tensor(B*N, actions_num)
-
-                # Predict actions
-                actions_weights = torch.tensor(cfg.actions_weights).to(device=device)
-                actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
-                actions_labels = torch.argmax(actions_scores, dim=1)
-                actions_correct = torch.eq(actions_labels.int(), actions_in.int()).float()
-                actions_correct_sum = torch.sum(actions_correct)
-                #actions_each_meter.update(actions_correct, batch_size)
-
-                # Get accuracy
-                actions_accuracy = actions_correct_sum.item() / actions_scores.shape[0]
-
-                actions_meter.update(actions_accuracy, batch_size)
-
-                # Total loss
-                total_loss = cfg.actions_loss_weight * actions_loss
-                loss_meter.update(total_loss.item(), batch_size)
-
-        info = {
-            'mode': mode,
-            'time': epoch_timer.timeit(),
-            'loss': loss_meter.avg,
-            'actions_acc': actions_meter.avg * 100,
-            #'actions_each _acc': actions_each_meter.avg * 100
-        }
-
-    return info
-
 class VolleyballEpoch():
 
     def __init__(self, mode, data_loader, model, device, cfg=None, optimizer=None, epoch=0):
@@ -144,7 +48,8 @@ class VolleyballEpoch():
                 'epoch': self.epoch,
                 'loss': self.loss_meter.avg,
                 'actions_acc': self.actions_meter.correct_rate * 100,
-                'actions_each_acc': self.actions_meter.correct_rate_each * 100
+                'actions_each_acc': self.actions_meter.correct_rate_each * 100,
+                'actions_each_num': self.actions_meter.all_num_each
             }
         elif self.mode == 'test':
             print("Testing in test dataset")
@@ -156,7 +61,8 @@ class VolleyballEpoch():
                 'time': self.epoch_timer.timeit(),
                 'loss': self.loss_meter.avg,
                 'actions_acc': self.actions_meter.correct_rate * 100,
-                'actions_each_acc': self.actions_meter.correct_rate_each * 100
+                'actions_each_acc': self.actions_meter.correct_rate_each * 100,
+                'actions_each_num': self.actions_meter.all_num_each
             }
         else:
             assert False, "mode name incorrect"

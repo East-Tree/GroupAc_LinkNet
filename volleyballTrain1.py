@@ -91,4 +91,3 @@ if __name__ == '__main__':
         if epoch > 10:
             if abs(all_info[epoch]['loss'] - all_info[epoch-1]['loss']) < cfg.break_line:
                 break
-

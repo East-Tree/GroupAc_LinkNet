@@ -438,3 +438,13 @@ class SelfNet3(nn.Module):
         actions_scores = self.mod_actions(self_states)  # B*N, actions_num
 
         return actions_scores
+
+# link net
+class LinkNet(nn.Module):
+    """
+    the link net using other individual's feature
+    """
+    def __init__(self, cfg_indi_feature, cfg_state, device=None, **arch_feature):
+        super(LinkNet, self).__init__()
+
+

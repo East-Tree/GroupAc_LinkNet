@@ -30,16 +30,17 @@ class Config1(object):
 
         # model parameter
         self.individual_dim = 1024
-        self.state_dim = 512
+        self.state_dim = 256
 
         # training parameter
         self.use_gpu = True
+        self.renew_weight = True
         self.batch_size = 8
-        self.train_dropout_prob = 0.5
+        self.train_dropout_prob = 0.3
         #self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]  # weight for each actions categories
-        self.actions_weights = [1., 1., 2., 3., 1., 2., 2., 0.2, 1.]
+        self.actions_weights = [1., 3., 2., 3., 1., 2., 2., 0.2, 1.]
         self.actions_loss_weight = 1  # weight for actions in loss function
-        self.max_epoch = 20
+        self.max_epoch = 30
         self.lr_plan = {5: 1e-4, 10: 2e-5, 20: 1e-5}
         self.train_learning_rate = 2e-4
         self.weight_decay = 0.05

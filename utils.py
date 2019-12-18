@@ -195,11 +195,11 @@ class AverageMeterTensor(object):
             self.all_num_each[label_tensor[i]] += 1.0
             if correct_tensor[i]:
                 self.correct_num_each[result_tensor[i]] += 1.0
-        self.correct_rate_each = (self.correct_num_each / self.all_num_each).cpu().numpy().tolist()
+        self.correct_rate_each = ((self.correct_num_each / self.all_num_each).cpu().numpy()*100)
 
         self.correct_num = int(torch.sum(self.correct_num_each))
         self.all_num = int(torch.sum(self.all_num_each))
-        self.correct_rate = self.correct_num / self.all_num
+        self.correct_rate = (self.correct_num / self.all_num) * 100
 
 
 

@@ -34,7 +34,7 @@ if __name__ == '__main__':
         test_len = full_dataset_len - train_len
         trainDataset, testDataset = data.random_split(full_dataset, [train_len, test_len])
     else:
-        random_seed = 777  # set the seed
+        random_seed = 7 # set the seed
         random.seed(random_seed)
         indices = list(range(full_dataset_len))
         random.shuffle(indices)

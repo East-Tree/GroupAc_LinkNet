@@ -42,13 +42,18 @@ class VolleyballEpoch():
                 self.optimizer.zero_grad()
                 self.total_loss.backward()
                 self.optimizer.step()
+            # renew the action loss weight by accuracy
+            if self.cfg.renew_weight:
+                new_weight = torch.nn.functional.softmax(self.actions_meter.correct_rate_each)
+                new_weight = new_weight * new_weight.size()[0]
+                self.cfg.actions_weights = new_weight.tolist()
             info = {
                 'mode': self.mode,
                 'time': self.epoch_timer.timeit(),
                 'epoch': self.epoch,
                 'loss': self.loss_meter.avg,
-                'actions_acc': self.actions_meter.correct_rate * 100,
-                'actions_each_acc': self.actions_meter.correct_rate_each * 100,
+                'actions_acc': self.actions_meter.correct_rate,
+                'actions_each_acc': self.actions_meter.correct_rate_each.tolist(),
                 'actions_each_num': self.actions_meter.all_num_each
             }
         elif self.mode == 'test':
@@ -60,8 +65,8 @@ class VolleyballEpoch():
                 'mode': self.mode,
                 'time': self.epoch_timer.timeit(),
                 'loss': self.loss_meter.avg,
-                'actions_acc': self.actions_meter.correct_rate * 100,
-                'actions_each_acc': self.actions_meter.correct_rate_each * 100,
+                'actions_acc': self.actions_meter.correct_rate,
+                'actions_each_acc': self.actions_meter.correct_rate_each.tolist(),
                 'actions_each_num': self.actions_meter.all_num_each
             }
         else:
@@ -84,6 +89,7 @@ class VolleyballEpoch():
 
         # Predict actions
         actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
+        print(self.cfg.actions_weights)
         actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
         actions_result = torch.argmax(actions_scores, dim=1).int()
 

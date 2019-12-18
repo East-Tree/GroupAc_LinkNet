@@ -34,7 +34,7 @@ class Config1(object):
 
         # training parameter
         self.use_gpu = True
-        self.batch_size = 8
+        self.batch_size = 16
         self.train_dropout_prob = 0.5
         #self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]  # weight for each actions categories
         self.actions_weights = [1., 1., 2., 3., 1., 2., 2., 0.2, 1.]

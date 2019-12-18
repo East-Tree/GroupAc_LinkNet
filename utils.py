@@ -108,10 +108,10 @@ def adjust_lr(optimizer, new_lr, logger):
     for param_group in optimizer.param_groups:
         param_group['lr'] = new_lr
 
+
 def label_gather(cate_size, obj_tensor, res_tensor):
     ob = torch.zeros(cate_size)
-    tensor = obj_tensor*res_tensor
-
+    tensor = obj_tensor * res_tensor
 
 
 class Logger(object):
@@ -119,17 +119,18 @@ class Logger(object):
         if os.path.exists(path):
             self.logPath = path + '/Logger.txt'
             with open(self.logPath, 'w') as f:
-                f.write("the logger file have been created"+'\n')
+                f.write("the logger file have been created" + '\n')
         else:
             assert False, "can not find logger, you silly B"
 
     def fPrint(self, message):
         with open(self.logPath, 'a') as f:
-            f.write(str(message)+'\n')
+            f.write(str(message) + '\n')
         print(message)
 
     def getPath(self):
         return self.logPath
+
 
 class AverageMeter(object):
     """
@@ -150,6 +151,56 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+class AverageMeterTensor(object):
+    """
+    Computes the average value
+    """
+
+    def __init__(self, actions_num):
+        self.actions_num = actions_num
+
+        self.correct_num_each = torch.zeros(actions_num, dtype=torch.float)
+        self.all_num_each = torch.zeros(actions_num, dtype=torch.float) + 1e-10
+        self.correct_rate_each = self.correct_num_each / self.all_num_each
+
+        self.correct_num = 0
+        self.all_num = 0
+        self.correct_rate = 0
+
+    def reset(self, actions_num=None):
+        if actions_num is None:
+            this_actions_num = self.actions_num
+        else:
+            this_actions_num = actions_num
+        self.correct_num_each = torch.zeros(actions_num, dtype=torch.float)
+        self.all_num_each = torch.zeros(actions_num, dtype=torch.float) + 1e-10
+        self.correct_rate_each = self.correct_num_each / self.all_num_each
+        self.correct_num = 0
+        self.all_num = 0
+        self.correct_rate = 0
+
+    def update(self, result_tensor0, label_tensor0):
+        """
+
+        :param result_tensor: actions mark for predicted result
+        :param label_tensor:  actions mark for ground truth
+        :result: renew each variable
+        """
+        result_tensor = result_tensor0.int()
+        label_tensor = label_tensor0.int()
+        correct_tensor = torch.eq(result_tensor, label_tensor)  # bool type
+        for i in range(correct_tensor.size()[0]):
+            self.all_num_each[label_tensor[i]] += 1.0
+            if correct_tensor[i]:
+                self.correct_num_each[result_tensor[i]] += 1.0
+        self.correct_rate_each = self.correct_num_each / self.all_num_each
+
+        self.correct_num = torch.sum(self.correct_num_each)
+        self.all_num = torch.sum(self.all_num_each)
+        self.correct_rate = self.correct_num / self.all_num
+
 
 
 class Timer(object):

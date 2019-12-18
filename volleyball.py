@@ -120,8 +120,7 @@ class VolleyballEpoch():
         self.optimizer = optimizer
         self.epoch = epoch
 
-        self.actions_meter = AverageMeter()
-        self.actions_each_meter = AverageMeter()
+        self.actions_meter = AverageMeterTensor(cfg.actions_num)
         self.loss_meter = AverageMeter()
         self.epoch_timer = Timer()
 
@@ -144,8 +143,8 @@ class VolleyballEpoch():
                 'time': self.epoch_timer.timeit(),
                 'epoch': self.epoch,
                 'loss': self.loss_meter.avg,
-                'actions_acc': self.actions_meter.avg * 100,
-                'actions_each _acc': self.actions_each_meter.avg * 100
+                'actions_acc': self.actions_meter.correct_rate * 100,
+                'actions_each_acc': self.actions_meter.correct_rate_each * 100
             }
         elif self.mode == 'test':
             print("Testing in test dataset")
@@ -156,8 +155,8 @@ class VolleyballEpoch():
                 'mode': self.mode,
                 'time': self.epoch_timer.timeit(),
                 'loss': self.loss_meter.avg,
-                'actions_acc': self.actions_meter.avg * 100,
-                'actions_each _acc': self.actions_each_meter.avg * 100
+                'actions_acc': self.actions_meter.correct_rate * 100,
+                'actions_each_acc': self.actions_meter.correct_rate_each * 100
             }
         else:
             assert False, "mode name incorrect"
@@ -180,22 +179,11 @@ class VolleyballEpoch():
         # Predict actions
         actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
         actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
-        actions_labels = torch.argmax(actions_scores, dim=1)
-        actions_in = actions_in.int()
-        actions_correct = torch.eq(actions_labels.int(), actions_in)
-        actions_each_correct = torch.zeros(self.cfg.actions_num,dtype=torch.float)
-        actions_each_all = torch.zeros(self.cfg.actions_num,dtype=torch.float)
-        for i in range(actions_correct.size()[0]):
-            actions_each_correct[actions_correct[i]] += 1
-            actions_each_all[actions_in[i]] += 1
-        actions_each_correct = actions_each_correct / actions_each_all
-        actions_correct_sum = torch.sum(actions_correct.float())
-        self.actions_each_meter.update(actions_each_correct, batch_size)
+        actions_result = torch.argmax(actions_scores, dim=1).int()
 
         # Get accuracy
-        actions_accuracy = actions_correct_sum.item() / actions_scores.shape[0]
+        self.actions_meter.update(actions_result, actions_in)
 
-        self.actions_meter.update(actions_accuracy, batch_size)
 
         # Total loss
         self.total_loss = self.cfg.actions_loss_weight * actions_loss

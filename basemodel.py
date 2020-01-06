@@ -3,6 +3,7 @@ from utils import *
 
 from torchvision import ops  # RoIAlign module
 
+
 # only self actions recognition similar to GCN work
 class SelfNet(nn.Module):
     """
@@ -76,8 +77,8 @@ class SelfNet(nn.Module):
         D = self.backbone_dim
         H, W = self.imagesize
         OH, OW = self.backbone_size
-        Hr = OH/H
-        Wr = OW/W
+        Hr = OH / H
+        Wr = OW / W
         NFB = self.arch_para['person_fea_dim']
 
         # Reshape the input data
@@ -90,7 +91,7 @@ class SelfNet(nn.Module):
             box_num = boxes_in_flat[i].size()[0]
             boxes_in_index.append(torch.tensor([[i]] * box_num))
         boxes_in_flat = torch.cat(boxes_in_flat, dim=0)
-        boxes_in_index = torch.cat(boxes_in_index,dim=0)
+        boxes_in_index = torch.cat(boxes_in_index, dim=0)
         #    cat flat and index together
         boxes_in_flat = torch.cat([boxes_in_index, boxes_in_flat], dim=1)
         #    convert the origin coordinate(rate) into backbone feature scale coordinate(absolute int)
@@ -120,7 +121,7 @@ class SelfNet(nn.Module):
         #  features_multiscale.requires_grad=False
 
         # RoI Align
-        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, (K,K))  # B*N, D, K, K,
+        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, (K, K))  # B*N, D, K, K,
 
         boxes_features = boxes_features.reshape(-1, D * K * K)  # B*N, D*K*K
         boxes_features.to(device=self.device)
@@ -136,6 +137,7 @@ class SelfNet(nn.Module):
         actions_scores = self.fc_actions(boxes_features)  # B*N, actions_num
 
         return actions_scores
+
 
 # add a state layer from model 1
 class SelfNet2(nn.Module):
@@ -161,23 +163,26 @@ class SelfNet2(nn.Module):
 
         # embedding sequence
         self.mod_embed = nn.Sequential(
-            nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,self.arch_para['person_fea_dim']),
-            nn.Sigmoid(),
+            nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,
+                      self.arch_para['person_fea_dim']),
+            nn.LeakyReLU(),
             nn.Dropout(p=self.arch_para['dropout_prob']),
-            nn.BatchNorm1d(self.arch_para['person_fea_dim']),
+            nn.BatchNorm1d(self.arch_para['person_fea_dim'])
         )
 
         # state sequence
         self.mod_state = nn.Sequential(
-            nn.Linear(self.arch_para['person_fea_dim'],self.arch_para['state_fea_dim']),
+            nn.Linear(self.arch_para['person_fea_dim'], self.arch_para['state_fea_dim']),
             nn.LeakyReLU(),
-            nn.Dropout(p=self.arch_para['dropout_prob'])
+            nn.Dropout(p=self.arch_para['dropout_prob']),
+            nn.BatchNorm1d(self.arch_para['state_fea_dim'])
         )
 
         # action sequence
         self.mod_actions = nn.Sequential(
             nn.Linear(self.arch_para['state_fea_dim'], self.actions_num),
-            nn.LeakyReLU()
+            nn.LeakyReLU(),
+            nn.Dropout(p=self.arch_para['dropout_prob'])
         )
 
         for m in self.modules():  # network initial for linear layer
@@ -227,8 +232,8 @@ class SelfNet2(nn.Module):
         D = self.backbone_dim
         H, W = self.imagesize
         OH, OW = self.backbone_size
-        Hr = OH/H
-        Wr = OW/W
+        Hr = OH / H
+        Wr = OW / W
         NFB = self.arch_para['person_fea_dim']
 
         # Reshape the input data
@@ -241,7 +246,7 @@ class SelfNet2(nn.Module):
             box_num = boxes_in_flat[i].size()[0]
             boxes_in_index.append(torch.tensor([[i]] * box_num))
         boxes_in_flat = torch.cat(boxes_in_flat, dim=0)
-        boxes_in_index = torch.cat(boxes_in_index,dim=0)
+        boxes_in_index = torch.cat(boxes_in_index, dim=0)
         #    cat flat and index together
         boxes_in_flat = torch.cat([boxes_in_index, boxes_in_flat], dim=1)
         #    convert the origin coordinate(rate) into backbone feature scale coordinate(absolute int)
@@ -271,7 +276,7 @@ class SelfNet2(nn.Module):
         #  features_multiscale.requires_grad=False
 
         # RoI Align
-        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, (K,K))  # B*N, D, K, K,
+        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, (K, K))  # B*N, D, K, K,
 
         boxes_features = boxes_features.reshape(-1, D * K * K)  # B*N, D*K*K
         boxes_features.to(device=self.device)
@@ -288,6 +293,7 @@ class SelfNet2(nn.Module):
 
         return actions_scores
 
+
 # add link actions recognition
 class SelfNet3(nn.Module):
     """
@@ -296,7 +302,7 @@ class SelfNet3(nn.Module):
 
     def __init__(self, cfg_imagesize, cfg_roisize, cfg_actions_num, device=None, **arch_feature):
 
-        super(SelfNet3, self).__init__()
+        super().__init__()
         self.imagesize = cfg_imagesize
         self.RoI_crop_size = cfg_roisize
         self.actions_num = cfg_actions_num
@@ -312,15 +318,16 @@ class SelfNet3(nn.Module):
 
         # embedding sequence
         self.mod_embed = nn.Sequential(
-            nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,self.arch_para['person_fea_dim']),
-            nn.Sigmoid(),
+            nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,
+                      self.arch_para['person_fea_dim']),
+            nn.LeakyReLU(),
             nn.Dropout(p=self.arch_para['dropout_prob']),
             nn.BatchNorm1d(self.arch_para['person_fea_dim']),
         )
 
         # state sequence
         self.mod_state = nn.Sequential(
-            nn.Linear(self.arch_para['person_fea_dim'],self.arch_para['state_fea_dim']),
+            nn.Linear(self.arch_para['person_fea_dim'], self.arch_para['state_fea_dim']),
             nn.LeakyReLU(),
             nn.Dropout(p=self.arch_para['dropout_prob'])
         )
@@ -328,7 +335,8 @@ class SelfNet3(nn.Module):
         # action sequence
         self.mod_actions = nn.Sequential(
             nn.Linear(self.arch_para['state_fea_dim'], self.actions_num),
-            nn.LeakyReLU()
+            nn.LeakyReLU(),
+            nn.Softmax(dim=1)
         )
 
         for m in self.modules():  # network initial for linear layer
@@ -378,8 +386,8 @@ class SelfNet3(nn.Module):
         D = self.backbone_dim
         H, W = self.imagesize
         OH, OW = self.backbone_size
-        Hr = OH/H
-        Wr = OW/W
+        Hr = 1 / H
+        Wr = 1 / W
         NFB = self.arch_para['person_fea_dim']
 
         # Reshape the input data
@@ -392,12 +400,14 @@ class SelfNet3(nn.Module):
             box_num = boxes_in_flat[i].size()[0]
             boxes_in_index.append(torch.tensor([[i]] * box_num))
         boxes_in_flat = torch.cat(boxes_in_flat, dim=0)
-        boxes_in_index = torch.cat(boxes_in_index,dim=0)
+        boxes_in_index = torch.cat(boxes_in_index, dim=0)
         #    cat flat and index together
         boxes_in_flat = torch.cat([boxes_in_index, boxes_in_flat], dim=1)
         #    convert the origin coordinate(rate) into backbone feature scale coordinate(absolute int)
-        operator = torch.tensor([1, Wr, Hr, Wr, Hr])
-        boxes_in_flat = boxes_in_flat.float() * operator
+        operator1 = torch.tensor([1, Wr, Hr, Wr, Hr])
+        operator2 = torch.tensor([1, OW, OH, OW, OH])  # rate coordinate
+        boxes_in_flat_rate = boxes_in_flat.float() * operator1
+        boxes_in_flat = boxes_in_flat_rate * operator2
         boxes_in_flat = boxes_in_flat.int().to(device=self.device)
         boxes_in_flat = boxes_in_flat.float()
 
@@ -422,7 +432,7 @@ class SelfNet3(nn.Module):
         #  features_multiscale.requires_grad=False
 
         # RoI Align
-        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, (K,K))  # B*N, D, K, K,
+        boxes_features = ops.roi_align(features_multiscale, boxes_in_flat, (K, K))  # B*N, D, K, K,
 
         boxes_features = boxes_features.reshape(-1, D * K * K)  # B*N, D*K*K
         boxes_features.to(device=self.device)
@@ -439,12 +449,132 @@ class SelfNet3(nn.Module):
 
         return actions_scores
 
+
 # link net
 class LinkNet(nn.Module):
     """
     the link net using other individual's feature
     """
-    def __init__(self, cfg_indi_feature, cfg_state, device=None, **arch_feature):
-        super(LinkNet, self).__init__()
 
+    def __init__(self, cfg_state_dim, cfg_cood_dim, cfg_out_dim, device=None, **arch_feature):
+        super().__init__()
+        self.arch_para = self.para_align(arch_feature)
+        self.state_dim = cfg_state_dim
+        self.cood_dim = cfg_cood_dim
+        self.coodmap_dim = int(self.state_dim * self.arch_para['map_dim_rate'])
+        self.out_dim = cfg_out_dim
+        self.device = device
+
+        # network layers
+
+    def para_align(self, para):
+        arch_para = {
+            'map_dim_rate': 0.5,
+            'dropout_prob': 0.3
+        }
+        for i in arch_para:
+            if i in para:
+                arch_para[i] = para[i]
+        return arch_para
+
+    def forward(self, batch_cood, batch_state):
+        """
+        :param batch_cood: tensor [person num, 4]
+        :param batch_state: tensor [person num, feature_dim]
+        :return: [new]
+        """
+        person_num = batch_cood.size()[0]
+
+
+class SpectatorNet(nn.Module):
+    """
+    generate sideline aware by a group of feature and the objective index
+    """
+
+    def __init__(self, cfg_self_dim, cfg_object_dim, cfg_index_dim, device=None, **arch_feature):
+        super().__init__()
+        self.arch_para = self.para_aling(arch_feature)
+        self.self_dim = cfg_self_dim
+        self.object_dim = cfg_object_dim
+        self.index_dim = cfg_index_dim
+        self.device = device
+
+        # network layers
+        self.biaslayer = BiasNet(self.self_dim,self.index_dim,self.object_dim,device=self.device,inter_num=self.arch_para['biasNet_channel'])
+
+    def para_align(self, para):
+        arch_para = {
+            'biasNet_channel': 8
+        }
+        for i in arch_para:
+            if i in para:
+                arch_para[i] = para[i]
+        return arch_para
+
+
+# tiny attention network. This layer works on situation that doing linear connect from one feature to another while it higtly depends on one part of it
+class BiasNet(nn.Module):
+    def __init__(self, input_dim, index_dim, output_dim, device=None, inter_num=8):
+        super().__init__()
+        self.input_dim = input_dim
+        self.index_dim = index_dim
+        self.output_dim = output_dim
+        self.device = device
+        self.inter_num = inter_num
+
+        # network layer
+        self.layer1 = nn.Linear(self.input_dim, self.output_dim * self.inter_num)
+        self.layer2 = nn.Linear(self.input_dim, self.index_dim * self.inter_num)
+
+    def forward(self, input, index, parallel=False):
+        """
+        :param parallel:
+        :type index: torch.tensor
+        :type input: torch.tensor
+        """
+        batch_size = input.size()[0]
+        if not parallel:
+            # network forward
+            intern1 = self.layer1(input)  # (batch_num, inter_num*out_dim)
+            index1 = self.layer2(input)  # (batch_num, inter_num*index_dim)
+
+            # calculate the dot product with index(out) and index(label)
+            index0 = index.reshape(-1, 1, self.index_dim).to(device=self.device)  # (batch_num,1,index_dim)
+            index1 = index1.reshape(-1, self.inter_num, self.index_dim)  # (batch_num, inter_num, index_dim)
+            index1 = torch.mul(index1, index0)  # (batch_num, inter_num, index_dim)
+            coefficient = torch.sum(index1, dim=2)  # (batch_num, inter_num), this is the similar factor with each channel and label
+            coefficient = F.softmax(coefficient, dim=1)  # (batch_num, inter_num)
+
+            # calculate the final result by coefficient
+            intern1 = intern1.reshape(-1, self.inter_num, self.output_dim)  # (batch_num, inter_num, out_dim)
+            coefficient = coefficient.reshape(-1, self.inter_num, 1)  # (batch_num, inter_num,1)
+            intern1 = torch.mul(intern1, coefficient)  # (batch_num, inter_num, out_dim)
+            intern1 = torch.sum(intern1, dim=1)  # (batch_num, out_dim)
+
+            return intern1
+        else:
+            """
+            in parallel mode, one batch only contains a group of feature,  the result will generated between each pairs of features
+            """
+            # network forward
+            intern1 = self.layer1(input)  # (batch_num, inter_num*out_dim)
+            index1 = self.layer2(input)  # (batch_num, inter_num*index_dim)
+
+            # dot product with (each feature channel(batch*inter_num)) and (each label(batch))
+            index1 = index1.reshape(-1, self.index_dim)  # (batch*inter_num, index_dim)
+            index0t = torch.t(index)  # (index_dim, batch)
+            coefficient = torch.mm(index1, index0t)  # (batch(source)*inter_num, batch(sink))
+            coefficient = coefficient.reshape(-1, self.inter_num, batch_size)  # (batch, inter_num, batch)
+            coefficient = torch.transpose(coefficient, 1, 2)  # (batch,batch,inter_num)
+            coefficient = torch.softmax(coefficient, dim=2)  # (batch(source),batch(sink),inter_num)
+            coefficient = torch.transpose(coefficient, 0, 1)  # (batch(sink),batch(source),inter_num)
+
+            # calculate result for each pairs of feature
+            intern1 = intern1.repeat(batch_size, 1)  # (batch_num(sink), batch_num(source), inter_num*out_dim)
+            intern1 = intern1.reshape(-1, batch_size, self.inter_num, self.output_dim)  # (batch_num, batch_num, inter_num, out_dim)
+            coefficient = coefficient.unsqueeze(3)  # (batch,batch, inter_num,1)
+            intern1 = torch.mul(intern1, coefficient)  # (batch_num, batch_num, inter_num, out_dim)
+            intern1 = torch.sum(intern1, dim=2)  # (batch_num(sink), batch_num(source), out_dim)
+
+            return intern1
 

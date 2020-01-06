@@ -11,7 +11,7 @@ from torch import optim
 import random
 
 if __name__ == '__main__':
-    introduce = "This program is the first model of Link Net model in volleyball dataset"
+    introduce = "base self model renew weight 1e-4"
     print(introduce)
     cfg = config.Config1()
     # create logger object
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     model = SelfNet2(cfg.imageSize, cfg.crop_size, cfg.actions_num, device,**arch_para)  # type: SelfNet2
     model.to(device=device)
     model.train()
-    log.fPrint(model)
+    log.fPrint(torch.sum)
     a = 1
     #    optimizer implement
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg.train_learning_rate,
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     #    begin training
     start_epoch = 1
     all_info = []
-    for epoch in range(start_epoch + cfg.max_epoch):
+    for epoch in range(start_epoch + cfg.max_epoch + 1):
         if epoch in cfg.lr_plan:
             adjust_lr(optimizer, cfg.lr_plan[epoch], log)
 

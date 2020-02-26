@@ -47,7 +47,7 @@ class VolleyballEpoch():
             # renew the action loss weight by accuracy
             if self.cfg.renew_weight:
                 new_weight = torch.nn.functional.softmin(self.actions_meter.correct_rate_each, dim=0)
-                new_weight = new_weight * 15.2
+                new_weight = new_weight * 9.
                 old_weight = torch.tensor(self.cfg.actions_weights)
                 new_weight = old_weight * (1-self.cfg.weight_renew_rate) + self.cfg.weight_renew_rate * new_weight
                 self.cfg.actions_weights = new_weight.tolist()

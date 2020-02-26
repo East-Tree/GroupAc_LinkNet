@@ -20,15 +20,14 @@ def new_collate(batch):
     # image:[sample1, sample2, ...]
     return [image, activities, actions, bbox]
 
+
 # define the volleyball dataset class
 class VolleyballDataset(data.Dataset):
-    def __init__(self, cfg_dataPath, cfg_imagesize=(720,1280)):
+    def __init__(self, cfg_dataPath, cfg_imagesize=(720, 1280)):
         self.datasetPath = cfg_dataPath + '/volleyball'
-        self.frameList = list(range(50)) #generate reading list for volleyball dataset
+        self.frameList = list(range(50))  # generate reading list for volleyball dataset
 
         # according to official document, the label bbox is corresponding to (720,1280)
-        self.scaleW = float(cfg_imagesize[1]/1280)
-        self.scaleH = float(cfg_imagesize[0]/720)
         self.imagesize = cfg_imagesize
 
         self.annotationData = self.readAnnotation()
@@ -43,7 +42,6 @@ class VolleyballDataset(data.Dataset):
         frameItem = self.allFrames[index]
         return self.readSpecificFrame(frameItem)
 
-
     ACTIVITIES = ['r_set', 'r_spike', 'r-pass', 'r_winpoint',
                   'l_set', 'l-spike', 'l-pass', 'l_winpoint']
     NUM_ACTIVITIES = 8
@@ -51,10 +49,10 @@ class VolleyballDataset(data.Dataset):
                'moving', 'setting', 'spiking', 'standing',
                'waiting']
     NUM_ACTIONS = 9
-    activity2id = {name:i for i, name in enumerate(ACTIVITIES)} # mode 1
-    action2id = {name:i for i, name in enumerate(ACTIONS)} # mode 2
-    id2activity = {i:name for i, name in enumerate(ACTIVITIES)} # mode 3
-    id2action = {i:name for i, name in enumerate(ACTIONS)}
+    activity2id = {name: i for i, name in enumerate(ACTIVITIES)}  # mode 1
+    action2id = {name: i for i, name in enumerate(ACTIONS)}  # mode 2
+    id2activity = {i: name for i, name in enumerate(ACTIVITIES)}  # mode 3
+    id2action = {i: name for i, name in enumerate(ACTIONS)}
 
     @classmethod
     def activityToId(cls, index):
@@ -62,20 +60,19 @@ class VolleyballDataset(data.Dataset):
         return cls.activity2id[index]
 
     @classmethod
-    def actionToId(cls,index):
+    def actionToId(cls, index):
         assert index in cls.ACTIONS, '%s not in action list' % index
         return cls.action2id[index]
 
     @classmethod
-    def idToActivity(cls,index):
+    def idToActivity(cls, index):
         assert index in list(range(cls.NUM_ACTIVITIES)), 'not in activity range'
         return cls.id2activity[index]
 
     @classmethod
-    def idToAction(cls,index):
+    def idToAction(cls, index):
         assert index in list(range(cls.NUM_ACTIONS)), 'not in action range'
-        return  cls.id2action[index]
-
+        return cls.id2action[index]
 
     def readAnnotation(self):
         """
@@ -99,20 +96,20 @@ class VolleyballDataset(data.Dataset):
                     activity = value[1]
                     activity = [VolleyballDataset.activityToId(activity)]  # convert the activity to id number
                     value = value[2:]
-                    #assert len(value)%5 == 0, 'the error occurs in %s at %s' % (fileName, annotationPath)
-                    if len(value)%5 != 0:
+                    # assert len(value)%5 == 0, 'the error occurs in %s at %s' % (fileName, annotationPath)
+                    if len(value) % 5 != 0:
                         print('the error occurs in %s at %s' % (fileName, annotationPath))
-                    induvidualNum = int(len(value) / 5)   # here is the bbox count in a frame
+                    induvidualNum = int(len(value) / 5)  # here is the bbox count in a frame
                     action = []
                     bbox = []
                     for i in range(induvidualNum):
-                        x1, y1, w, h = map(int,value[i*5:i*5+4])
+                        x1, y1, w, h = map(float, value[i * 5:i * 5 + 4])
                         x2 = x1 + w
                         y2 = y1 + h
-                        x1, x2 = map(lambda x: int(x * self.scaleW), [x1, x2])
-                        y1, y2 = map(lambda x: int(x * self.scaleH), [y1, y2])
+                        x1, x2 = map(lambda x: x / 1280, [x1, x2])
+                        y1, y2 = map(lambda x: x / 720, [y1, y2])
                         bbox.append([x1, y1, x2, y2])
-                        action.append([VolleyballDataset.actionToId(value[i*5+4])])
+                        action.append([VolleyballDataset.actionToId(value[i * 5 + 4])])
                     fid = int(fileName.split('.')[0])
                     annotation[fid] = {
                         'file_name': fileName,  # the file name of a single frame, like 00000.jpg
@@ -131,7 +128,7 @@ class VolleyballDataset(data.Dataset):
                 frames.append((sid, fid))
         return frames
 
-    def readSpecificFrame(self,frameIndex: tuple):
+    def readSpecificFrame(self, frameIndex: tuple):
 
         sid, fid = frameIndex
         framePath = self.datasetPath + '/%d/%d/%d.jpg' % (sid, fid, fid)

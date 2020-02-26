@@ -1,6 +1,7 @@
 import torch
 import time
 import os
+import numpy as np
 
 
 def prep_images(images):
@@ -77,6 +78,30 @@ def sincos_encoding_2d(positions, d_emb):
 
     return embeddings
 
+def pooling_func(input, method='ave', other=None):
+    """
+    this is a pooling lib including lot of pooling method
+    :param input: torch.tensor [num, input_fea_dim]
+    :param method: 'ave' 'max' 'coef'
+    :param other:
+    :return: input feature dim
+    """
+    if method == 'ave':
+        # doing average pooling
+        num = input.size()[0]
+        return torch.sum(input,dim=0) / num
+    elif method == 'max':
+        # doing maximum pooling
+        return torch.max(input,dim=0)[0]
+    elif method == 'coef':
+        """
+        input: [num, dim]
+        other: [num,1]
+        """
+        return torch.sum(torch.mul(input, other), dim=0)
+    else:
+        assert False, 'not this pooling method found, you silly B'
+
 
 def print_log(file_path, *args):
     print(*args)
@@ -103,10 +128,10 @@ def show_epoch_info(phase, log_path, info):
         info['activities_acc'], info['loss'], info['time']))
 
 
-def adjust_lr(optimizer, new_lr, logger):
-    logger.fPrint('change learning rate: %s' % new_lr)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = new_lr
+def adjust_lr(optimizer, lr_plan, logger):
+    logger.fPrint('change learning rate:' + str(lr_plan))
+    for param_group in lr_plan:
+        optimizer.param_groups[param_group-1]['lr'] = lr_plan[param_group]
 
 
 def label_gather(cate_size, obj_tensor, res_tensor):
@@ -183,7 +208,6 @@ class AverageMeterTensor(object):
 
     def update(self, result_tensor0, label_tensor0):
         """
-
         :param result_tensor: actions mark for predicted result
         :param label_tensor:  actions mark for ground truth
         :result: renew each variable
@@ -192,7 +216,7 @@ class AverageMeterTensor(object):
         label_tensor = label_tensor0.int()
         correct_tensor = torch.eq(result_tensor, label_tensor)  # bool type
         for i in range(correct_tensor.size()[0]):
-            self.all_num_each[label_tensor[i]] += 1.0
+            self.all_num_each[label_tensor[i]] = self.all_num_each[label_tensor[i]]+1.0
             if correct_tensor[i]:
                 self.correct_num_each[result_tensor[i]] += 1.0
         self.correct_rate_each = ((self.correct_num_each / self.all_num_each).cpu()*100)

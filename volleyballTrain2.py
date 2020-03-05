@@ -13,6 +13,7 @@ from torch import optim
 import random
 from tensorboardX import SummaryWriter
 
+
 class Focalloss(nn.Module):
     def __init__(self):
         super().__init__()
@@ -225,8 +226,8 @@ class VolleyballEpoch2():
         actions_result = torch.argmax(actions_scores, dim=1).int()
         activities_result = torch.argmax(activities_scores, dim=1).int()
         # loss
-        actions_weights = torch.tensor(self.cfg.actions_weights2).to(device=self.device)
-        activities_weights = torch.tensor(self.cfg.activities_weights2).to(device=self.device)
+        actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
+        activities_weights = torch.tensor(self.cfg.activities_weights).to(device=self.device)
         #   cross entropy
         # actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
         #   focal loss
@@ -234,7 +235,7 @@ class VolleyballEpoch2():
         actions_loss = focal_loss(actions_scores, actions_in, device0=self.device, weight=actions_weights)
         activities_loss = focal_loss(activities_scores, activities_in, device0=self.device, weight=activities_weights)
         # Total loss
-        self.total_loss = self.cfg.actions_loss_weight2 * actions_loss + self.cfg.activities_loss_weight2 * activities_loss
+        self.total_loss = self.cfg.actions_loss_weight * actions_loss + self.cfg.activities_loss_weight * activities_loss
         self.loss_meter.update(self.total_loss.item(), batch_size)
         # Get accuracy
         self.actions_meter.update(actions_result, actions_in)
@@ -243,7 +244,7 @@ class VolleyballEpoch2():
 if __name__ == '__main__':
     introduce = "base self model renew weight 1e-4"
     print(introduce)
-    cfg = config.Config1()
+    cfg = config.Config2()
     para_path = None
     ACTIONS = ['blocking', 'digging', 'falling', 'jumping',
                'moving', 'setting', 'spiking', 'standing',
@@ -286,7 +287,7 @@ if __name__ == '__main__':
     #   dataloader implement
     if cfg.train_mode == 0 or cfg.train_mode == 2:
         params = {
-            'batch_size': cfg.batch_size1,
+            'batch_size': cfg.batch_size,
             'shuffle': True
         }
         train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.new_collate, **params)
@@ -342,7 +343,7 @@ if __name__ == '__main__':
                     break
     if cfg.train_mode == 1 or cfg.train_mode == 2:
         params = {
-            'batch_size': cfg.batch_size2,
+            'batch_size': cfg.batch_size,
             'shuffle': True
         }
         train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.new_collate, **params)
@@ -351,26 +352,27 @@ if __name__ == '__main__':
         if cfg.train_mode == 1:
             para_path = cfg.para_load_path
         #    build model
-        model = LinkNet(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device, **cfg.model_para2)  # type: LinkNet
+        model = LinkNet1(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device, **cfg.model_para)  # type: LinkNet1
         model.to(device=device)
         model.train()
         #    optimizer implement
-        optimizer = optim.Adam(
-            [
+        params_group = [
                 {"params": model.baselayer.backbone_net.parameters()},
                 {"params": model.baselayer.mod_embed.parameters()},
                 {"params": model.read_actions.parameters()},
                 {"params": model.read_activities.parameters()},
-                {"params": model.linklayer.biaslayer.parameters()}
-            ],
+                {"params": model.linklayer.parameters()}
+            ]
+        optimizer = optim.Adam(
+            params_group,
             lr=cfg.train_learning_rate,
             weight_decay=cfg.weight_decay)
         #    begin training
         start_epoch = 1
         all_info = []
-        for epoch in range(start_epoch, start_epoch + cfg.max_epoch2):
-            if epoch in cfg.lr_plan2:
-                adjust_lr(optimizer, cfg.lr_plan2[epoch], log)
+        for epoch in range(start_epoch, start_epoch + cfg.max_epoch):
+            if epoch in cfg.lr_plan:
+                adjust_lr(optimizer, cfg.lr_plan[epoch], log)
 
             #  each epoch in the iteration
             model.train()
@@ -401,9 +403,7 @@ if __name__ == '__main__':
                     'loss']) < cfg.break_line:
                     break
     if cfg.train_mode == 'T':
-        a = torch.tensor([[0.2,0.8],[0.3,0.7]])
-        b = torch.tensor([0,1])
-        w = torch.tensor([1.0,2.0])
-        focal_loss = Focalloss()
-        print(focal_loss(a,b,weight=w))
+        a = torch.randn(2,5,1024)
+        _,a=routing(a)
+        print(a)
     TBWriter.close()

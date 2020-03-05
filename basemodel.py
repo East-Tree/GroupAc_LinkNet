@@ -208,8 +208,6 @@ class SelfNet2(nn.Module):
         self.fc_activities.load_state_dict(state['fc_activities_state_dict'])
         print('Load model states from: ', filepath)
 
-
-
     def forward(self, batch_data):
         # image_in is a list containing image batch data(tensor(c,h,w))
         # boxes_in is a list containing bbox batch data(tensor(num,4))
@@ -353,7 +351,7 @@ class SelfNet0(nn.Module):
 
 
 # link net
-class LinkNet(nn.Module):
+class LinkNet0(nn.Module):
     """
     the link net using other individual's feature
     """
@@ -444,7 +442,7 @@ class LinkNet(nn.Module):
         batch_num = len(boxes_in)
         person_num = [boxes_in[i].size()[0] for i in range(batch_num)]
         # first stage , backbone layer
-        person_fea = self.baselayer(batch_data)    # (batch#num, feature)
+        person_fea = self.baselayer(batch_data)  # (batch#num, feature)
         # second stage, link layer
         action_scores = []
         activity_scores = []
@@ -456,12 +454,12 @@ class LinkNet(nn.Module):
                 vec1, coef0 = self.linklayer(vec0, boxes_in[i])
                 # renew the personal feature
                 rate = self.arch_para['feature1_renew_rate']
-                vec0 = torch.add(rate*vec1,(1-rate)*vec0)
+                vec0 = torch.add(rate * vec1, (1 - rate) * vec0)
             # pooling for group activity(feature2)
             # coef0 (source, sink, 1)
             coef0, _ = torch.max(coef0, dim=1)  # (source ,1)
             coef0 = torch.softmax(coef0, dim=0)  # (source, 1)
-            group_fea = pooling_func(vec0, method=self.arch_para['pooling_method'],other=coef0).unsqueeze(dim=0)
+            group_fea = pooling_func(vec0, method=self.arch_para['pooling_method'], other=coef0).unsqueeze(dim=0)
             datum = datum + person_num[i]
             # scores result output
             action_scores.append(vec0)  # (batch#num, actions_num)
@@ -474,6 +472,137 @@ class LinkNet(nn.Module):
         action_scores = self.read_actions(action_scores)
 
         return action_scores, activity_scores
+
+
+# linknet2, this model combine basic GCN process and two modified module
+class LinkNet1(nn.Module):
+    """
+    the link net using other individual's feature
+    """
+
+    def __init__(self, cfg_imagesize, cfg_roisize, cfg_actions_num, cfg_activities_num, device=None, **arch_feature):
+        super().__init__()
+        self.arch_para = self.para_align(arch_feature)
+        self.imagesize = cfg_imagesize
+        self.RoI_crop_size = cfg_roisize
+        self.actions_num = cfg_actions_num
+        self.activities_num = cfg_activities_num
+        self.device = device
+
+        # network layers
+        #   self awareness
+        self.baselayer = SelfNet0(self.imagesize, self.RoI_crop_size, device=self.device, **self.arch_para)
+
+        #   action sequence
+        self.read_actions = nn.Sequential(
+            nn.Linear(self.arch_para['person_fea_dim'] + self.arch_para['relation_fea_dim'], self.actions_num),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(self.actions_num)
+        )
+        #   activity sequence
+        self.read_activities = nn.Sequential(
+            nn.Linear(self.arch_para['relation_fea_dim'], self.activities_num),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(self.activities_num)
+        )
+        #  posi-bias convolution model group
+        self.linklayer = []
+        self.linklayer.append(PosiBiasNet(self.arch_para['person_fea_dim'], self.arch_para['relation_fea_dim'],
+                                        device=self.device, inter_num=self.arch_para['biasNet_channel']))
+        if self.arch_para['iterative_times'] > 1:
+            i = 1
+            while i < self.arch_para['iterative_times']:
+                self.linklayer.append(PosiBiasNet(self.arch_para['relation_fea_dim'], self.arch_para['relation_fea_dim'],
+                                                device=self.device, inter_num=self.arch_para['biasNet_channel']))
+        self.linklayer = nn.ModuleList(self.linklayer)
+        # initial network parameter
+        for m in self.modules():  # network initial for linear layer
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+                nn.init.zeros_(m.bias)
+
+    def para_align(self, para):
+        arch_para = {
+            'feature1_renew_rate': 0.2,
+            'dropout_prob': 0.3,
+            'biasNet_channel': 8,
+            'iterative_times': 3,
+            'pooling_method': 'ave',
+            'routing_times': 3
+        }
+        for i in arch_para:
+            if i not in para:
+                para[i] = arch_para[i]
+        return para
+
+    def savemodel(self, filepath):
+        state = {
+            'base_state_dict': self.baselayer.state_dict(),
+            'link_layer_dict': self.linklayer.state_dict(),
+            'read_actions_dict': self.read_actions.state_dict(),
+            'read_activities_dict': self.read_activities.state_dict()
+        }
+
+        torch.save(state, filepath)
+        print('model saved to:', filepath)
+
+    def loadmodel(self, filepath, mode=0):
+        state = torch.load(filepath)
+
+        if mode == 0:
+            self.baselayer.load_state_dict(state['base_state_dict'])
+            self.linklayer.load_state_dict(state['link_layer_dict'])
+            self.read_actions.load_state_dict(state['read_actions_dict'])
+            self.read_activities.load_state_dict(state['read_activities_dict'])
+            print('Load model states from: ', filepath)
+        elif mode == 1:
+            self.baselayer.load_state_dict(state['base_state_dict'])
+            self.read_actions.load_state_dict(state['read_actions_dict'])
+            print('Load model states from: ', filepath)
+        else:
+            assert False, "mode pattern error, you silly B"
+
+    def forward(self, batch_data):
+        """
+        :param batch_data: [image_in, boxes_in]]
+        image_in is a list containing image batch data(tensor(c,h,w))
+        boxes_in is a list containing bbox batch data(tensor(num,4[0,1]))
+        :return: [new]
+        """
+        ###################################
+        # first layer, the backbone
+        ###################################
+        batch_num = len(batch_data[1])
+        person_num = [batch_data[1][i].size()[0] for i in range(batch_num)]
+        person_fea0 = self.baselayer(batch_data)  # (batch#num, feature)
+
+        ###################################
+        # second layer, feature embedding and feature gathering
+        ###################################
+        action_scores = []
+        activity_scores = []
+        datum = 0
+        coef0 = None
+        for i in range(batch_num):
+            vec0 = person_fea0[datum:datum + person_num[i]]
+            for j in range(self.arch_para['iterative_times']):
+                vec0 = self.linklayer[j](vec0, batch_data[1][i])  # (ob_num(sink),ob_num(source),out_dim)
+                vec0, coef0 = routing(vec0, times=self.arch_para['routing_times'])
+            # coef0 (sink, source, 1)
+            coef0 = torch.softmax(coef0, dim=0)  # (source, 1)
+            # concatenate final person feature and group feature
+            person_fea = torch.cat((person_fea0[datum:datum + person_num[i]], vec0), dim=1)
+            group_fea = pooling_func(vec0, method=self.arch_para['pooling_method'], other=coef0).unsqueeze(dim=0)
+            datum = datum + person_num[i]
+            # scores result output
+            action_scores.append(person_fea)  # (batch#num, actions_num)
+            activity_scores.append(group_fea)  # (batch#num, activities_num)
+
+        action_scores = self.read_actions(torch.cat(action_scores, dim=0))
+        activity_scores = self.read_activities(torch.cat(activity_scores, dim=0))
+
+        return action_scores, activity_scores
+
 
 class SpectatorNet(nn.Module):
     """
@@ -649,7 +778,7 @@ class PosiBiasNet(nn.Module):
         baseAngel = math.pi / self.inter_num
         self.index_vector = torch.tensor(
             [[math.sin(baseAngel * i), math.cos(baseAngel * i)] for i in range(self.inter_num)]).to(device=device)
-
+        self.index_vector = torch.transpose(self.index_vector,0,1) # [2, inter_num]
         # network layer
         self.layer1 = nn.Linear(self.input_dim, self.output_dim * self.inter_num)
 
@@ -665,7 +794,7 @@ class PosiBiasNet(nn.Module):
         """
         # network forward
         intern1 = self.layer1(input)  # (ob_num, out_dim*inter_num)
-        intern1 = intern1.to(device=self.device)
+        #intern1 = intern1.to(device=self.device)
 
         # calculate the relative coordinate between each objects
         cood0 = index.reshape(-1, self.index_dim)  # (ob_num, 4[x1,y1,x2,y2])
@@ -680,14 +809,15 @@ class PosiBiasNet(nn.Module):
 
         # calculate the relative coefficient between relative coordinate and index vector
         coef0 = torch.mm(cood0.reshape(-1, 2),
-                         torch.transpose(self.index_vector, 0, 1).to(dtype=cood0.dtype))  # (ob_num(so)*ob_num(si),inter_num)
+                         self.index_vector.to(
+                             dtype=cood0.dtype))  # (ob_num(so)*ob_num(si),inter_num)
         coef0 = F.softmax(coef0, dim=1)  # softmax in dim 2
         coef0 = coef0.reshape(object_num, object_num, -1)  # (ob_num(so),ob_num(si),inter_num)
 
         # doing batch matrix multiple
         intern1 = intern1.reshape(object_num, self.output_dim, -1)  # (ob_num(source), out_dim, inter_num)
-        coef0 = torch.transpose(coef0, 1, 2)  # (ob_num(so),inter_num,ob_num(si))
-        intern1 = torch.matmul(intern1, coef0.to(dtype=intern1.dtype))  # (ob_num(source),out_dim,ob_num(sink))
+        intern1 = torch.matmul(intern1, coef0.transpose(1, 2).to(dtype=intern1.dtype))  # (ob_num(source),out_dim,ob_num(sink))
         intern1 = torch.transpose(intern1, 1, 2)  # (ob_num(source),ob_num(sink),out_dim)
+        intern1 = torch.transpose(intern1, 0, 1)  # (ob_num(sink),ob_num(source),out_dim)
 
         return intern1

@@ -1,8 +1,42 @@
 import torch
+import torch.nn.functional as F
 import time
 import os
 import numpy as np
 
+# vector normalization
+def vec_norm(input0):
+    x = torch.pow(input0, 2.0)
+    x = torch.sum(x, dim=-1, keepdim=True)
+    x = torch.sqrt(x)
+    return torch.div(input0, x)
+
+# dynamic routing algorithm
+def routing(input0, weight0=None, times=3):
+    """
+    :param input0: (batch, num, fea)
+    :param weight0: (batch, num)
+    :param times:
+    :return:
+    """
+    if weight0 is None:
+        weight = torch.zeros(input0.size()[0:2], device=input0.device, dtype=input0.dtype)
+    else:
+        weight = weight0.to(device=input0.device, dtype=input0.dtype)
+    vec = None
+    input_norm = vec_norm(input0)
+    for i in range(times):
+        weight1 = F.softmax(weight, dim=-1)  # (batch,num)
+        vec = torch.mul(input0, weight1.unsqueeze(2))    # (batch, num, fea)
+        vec = torch.sum(vec, dim=1)
+        vec1 = vec.unsqueeze(1)    # (batch, 1, fea)
+        vec1 = vec_norm(vec1)     # (batch, 1, fea)
+        weight1 = torch.mul(input0, vec1)    # (batch, num, fea)
+        weight1 = torch.sum(weight1, dim=-1)  # (batch,num)
+        weight1 = F.softmax(weight1, dim=-1)    # (batch,num)
+        weight = torch.add(weight, weight1)
+
+    return vec, weight
 
 def prep_images(images):
     """
@@ -11,7 +45,6 @@ def prep_images(images):
         images: pytorch tensor
     """
     images = images.div(255.0)
-
     images = torch.sub(images, 0.5)
     images = torch.mul(images, 2.0)
 
@@ -224,7 +257,6 @@ class AverageMeterTensor(object):
         self.correct_num = int(torch.sum(self.correct_num_each))
         self.all_num = int(torch.sum(self.all_num_each))
         self.correct_rate = (self.correct_num / self.all_num) * 100
-
 
 
 class Timer(object):

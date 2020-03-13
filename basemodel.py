@@ -202,10 +202,8 @@ class SelfNet2(nn.Module):
 
     def loadmodel(self, filepath):
         state = torch.load(filepath)
-        self.backbone.load_state_dict(state['backbone_state_dict'])
-        self.fc_emb.load_state_dict(state['fc_emb_state_dict'])
-        self.fc_actions.load_state_dict(state['fc_actions_state_dict'])
-        self.fc_activities.load_state_dict(state['fc_activities_state_dict'])
+        self.baselayer.load_state_dict(state['base_state_dict'])
+        self.read_actions.load_state_dict(state['read_actions_dict'])
         print('Load model states from: ', filepath)
 
     def forward(self, batch_data):
@@ -557,7 +555,6 @@ class LinkNet1(nn.Module):
             print('Load model states from: ', filepath)
         elif mode == 1:
             self.baselayer.load_state_dict(state['base_state_dict'])
-            self.read_actions.load_state_dict(state['read_actions_dict'])
             print('Load model states from: ', filepath)
         else:
             assert False, "mode pattern error, you silly B"

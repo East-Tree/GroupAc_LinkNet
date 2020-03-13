@@ -163,8 +163,12 @@ def show_epoch_info(phase, log_path, info):
 
 def adjust_lr(optimizer, lr_plan, logger):
     logger.fPrint('change learning rate:' + str(lr_plan))
-    for param_group in lr_plan:
-        optimizer.param_groups[param_group-1]['lr'] = lr_plan[param_group]
+    if 0 in lr_plan:
+        for i in optimizer.param_groups:
+            i['lr'] = lr_plan[0]
+    else:
+        for param_group in lr_plan:
+            optimizer.param_groups[param_group-1]['lr'] = lr_plan[param_group]
 
 
 def label_gather(cate_size, obj_tensor, res_tensor):
@@ -258,6 +262,52 @@ class AverageMeterTensor(object):
         self.all_num = int(torch.sum(self.all_num_each))
         self.correct_rate = (self.correct_num / self.all_num) * 100
 
+class GeneralAverageMeterTensor(object):
+    """
+    Computes the average value
+    """
+
+    def __init__(self, actions_num):
+        self.actions_num = actions_num
+
+        self.correct_num_each = torch.zeros(actions_num, dtype=torch.float)
+        self.all_num_each = torch.zeros(actions_num, dtype=torch.float) + 1e-10
+        self.correct_rate_each = self.correct_num_each / self.all_num_each
+
+        self.correct_num = 0
+        self.all_num = 0
+        self.correct_rate = 0
+
+    def reset(self, actions_num=None):
+        if actions_num is None:
+            this_actions_num = self.actions_num
+        else:
+            this_actions_num = actions_num
+        self.correct_num_each = torch.zeros(actions_num, dtype=torch.float)
+        self.all_num_each = torch.zeros(actions_num, dtype=torch.float) + 1e-10
+        self.correct_rate_each = self.correct_num_each / self.all_num_each
+        self.correct_num = 0
+        self.all_num = 0
+        self.correct_rate = 0
+
+    def update(self, result_tensor0, label_tensor0):
+        """
+        :param result_tensor: actions mark for predicted result
+        :param label_tensor:  actions mark for ground truth
+        :result: renew each variable
+        """
+        label_tensor = label_tensor0.int()
+        result_tensor = result_tensor0.detach()
+        for i in range(label_tensor.size()[0]):
+
+            self.all_num_each[label_tensor[i]] = self.all_num_each[label_tensor[i]]+1.0
+            self.correct_num_each[label_tensor[i]] += result_tensor[i]
+
+        self.correct_rate_each = (self.correct_num_each / self.all_num_each).cpu()
+
+        self.correct_num = int(torch.sum(self.correct_num_each))
+        self.all_num = int(torch.sum(self.all_num_each))
+        self.correct_rate = (self.correct_num / self.all_num)
 
 class Timer(object):
     """

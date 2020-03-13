@@ -33,19 +33,22 @@ class Focalloss(nn.Module):
         input_soft = F.softmax(input, dim=1)
         input_logsoft = F.log_softmax(input, dim=1)
         batch = target.size()[0]
-        target_mask = target.reshape(-1,1)
+        target_mask = target.reshape(-1, 1)
         input_soft = torch.gather(input_soft, 1, target_mask)
         input_logsoft = torch.gather(input_logsoft, 1, target_mask)
         if weight is None:
-            weight_tensor = torch.tensor([1]*batch, device=device1)
+            weight_tensor = torch.tensor([1] * batch, device=device1)
         else:
-            weight_tensor = weight.repeat(batch,1).to(device=device1)
+            weight_tensor = weight.repeat(batch, 1).to(device=device1)
             weight_tensor = torch.gather(weight_tensor, 1, target_mask)
-        weight_tensor = weight_tensor.reshape(-1,1)
-        loss = (-1)*weight_tensor*torch.pow(1.0-input_soft,attenuate)*input_logsoft
-        loss = torch.mean(loss,dim=0)
+        weight_tensor = weight_tensor.reshape(-1, 1)
+        focal_weight = weight_tensor * torch.pow(1.0 - input_soft, attenuate)
+        # print('focal loss coeff:' + str(focal_weight))
+        loss = (-1) * focal_weight * input_logsoft
+        loss = torch.mean(loss, dim=0)
 
-        return loss
+        return loss, focal_weight
+
 
 class VolleyballEpoch():
 
@@ -61,6 +64,7 @@ class VolleyballEpoch():
 
         self.actions_meter = AverageMeterTensor(cfg.actions_num)
         self.loss_meter = AverageMeter()
+        self.actions_loss_weight = GeneralAverageMeterTensor(cfg.actions_num)
         self.epoch_timer = Timer()
 
         self.total_loss = None
@@ -132,15 +136,16 @@ class VolleyballEpoch():
         # actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
         #   focal loss
         focal_loss = Focalloss()
-        actions_loss = focal_loss(actions_scores, actions_in, self.device, weight=actions_weights)
+        actions_loss, action_loss_w = focal_loss(actions_scores, actions_in, self.device, weight=actions_weights)
         actions_result = torch.argmax(actions_scores, dim=1).int()
-
-        # Get accuracy
-        self.actions_meter.update(actions_result, actions_in)
 
         # Total loss
         self.total_loss = self.cfg.actions_loss_weight * actions_loss
+
+        # Get accuracy
+        self.actions_meter.update(actions_result, actions_in)
         self.loss_meter.update(self.total_loss.item(), batch_size)
+        self.actions_loss_weight.update(action_loss_w.squeeze(1), actions_in)
 
 class VolleyballEpoch2():
 
@@ -157,6 +162,8 @@ class VolleyballEpoch2():
         self.actions_meter = AverageMeterTensor(cfg.actions_num)
         self.activities_meter = AverageMeterTensor(cfg.activities_num)
         self.loss_meter = AverageMeter()
+        self.actions_loss_weight = GeneralAverageMeterTensor(cfg.actions_num)
+        self.activities_loss_weight = GeneralAverageMeterTensor(cfg.activities_num)
         self.epoch_timer = Timer()
 
         self.total_loss = None
@@ -179,9 +186,11 @@ class VolleyballEpoch2():
                 'loss': self.loss_meter.avg,
                 'actions_acc': self.actions_meter.correct_rate,
                 'actions_each_acc': self.actions_meter.correct_rate_each.numpy().tolist(),
+                'actions_loss_weight': self.actions_loss_weight.correct_rate_each.numpy().tolist(),
                 'actions_each_num': self.actions_meter.all_num_each,
                 'activities_acc': self.activities_meter.correct_rate,
                 'activities_each_acc': self.activities_meter.correct_rate_each.numpy().tolist(),
+                'activities_loss_weight': self.activities_loss_weight.correct_rate_each.numpy().tolist(),
                 'activities_each_num': self.activities_meter.all_num_each
             }
         elif self.mode == 'test':
@@ -220,7 +229,8 @@ class VolleyballEpoch2():
         activities_in = activities_in.reshape(-1).to(device=self.device)
 
         # forward
-        actions_scores, activities_scores = self.model((batch_data[0], batch_data[3]))  # tensor(B#N, actions_num) & tensor(B)
+        actions_scores, activities_scores = self.model(
+            (batch_data[0], batch_data[3]))  # tensor(B#N, actions_num) & tensor(B)
 
         # Predict
         actions_result = torch.argmax(actions_scores, dim=1).int()
@@ -232,14 +242,19 @@ class VolleyballEpoch2():
         # actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
         #   focal loss
         focal_loss = Focalloss()
-        actions_loss = focal_loss(actions_scores, actions_in, device0=self.device, weight=actions_weights)
-        activities_loss = focal_loss(activities_scores, activities_in, device0=self.device, weight=activities_weights)
+        actions_loss, action_loss_w = focal_loss(actions_scores, actions_in, device0=self.device,
+                                                 weight=actions_weights)
+        activities_loss, activi_loss_w = focal_loss(activities_scores, activities_in, device0=self.device,
+                                                    weight=activities_weights)
         # Total loss
         self.total_loss = self.cfg.actions_loss_weight * actions_loss + self.cfg.activities_loss_weight * activities_loss
         self.loss_meter.update(self.total_loss.item(), batch_size)
         # Get accuracy
         self.actions_meter.update(actions_result, actions_in)
         self.activities_meter.update(activities_result, activities_in)
+        self.actions_loss_weight.update(action_loss_w.squeeze(1), actions_in)
+        self.activities_loss_weight.update(activi_loss_w.squeeze(1), activities_in)
+
 
 if __name__ == '__main__':
     introduce = "base self model renew weight 1e-4"
@@ -268,11 +283,11 @@ if __name__ == '__main__':
 
     # divide the whole dataset into train and test
     full_dataset_len = full_dataset.__len__()
-    if cfg.random_split:
+    if cfg.split_mode == 3:
         train_len = int(full_dataset_len * cfg.dataset_splitrate)
         test_len = full_dataset_len - train_len
         trainDataset, testDataset = data.random_split(full_dataset, [train_len, test_len])
-    else:
+    elif cfg.split_mode == 2:
         random_seed = 137  # set the seed
         random.seed(random_seed)
         indices = list(range(full_dataset_len))
@@ -282,10 +297,12 @@ if __name__ == '__main__':
         test_indices = indices[split:]
         trainDataset = data.Subset(full_dataset, train_indices)
         testDataset = data.Subset(full_dataset, test_indices)
-
+    else:  # split_mode = 1
+        trainDataset = volleyballDataset.VolleyballDataset(cfg.dataPath, cfg.imageSize, cfg.train_seqs)
+        testDataset = volleyballDataset.VolleyballDataset(cfg.dataPath, cfg.imageSize, cfg.test_seqs)
     # begin model train in
     #   dataloader implement
-    if cfg.train_mode == 0 or cfg.train_mode == 2:
+    if cfg.train_mode == 0:
         params = {
             'batch_size': cfg.batch_size,
             'shuffle': True
@@ -296,6 +313,9 @@ if __name__ == '__main__':
         model = SelfNet2(cfg.imageSize, cfg.crop_size, cfg.actions_num, device, **cfg.model_para)  # type: SelfNet2
         model.to(device=device)
         model.train()
+        # continue work
+        if cfg.goon is True:
+            model.loadmodel(cfg.goon_path)
         #    optimizer implement
         optimizer = optim.Adam(
             [
@@ -306,7 +326,7 @@ if __name__ == '__main__':
             lr=cfg.train_learning_rate,
             weight_decay=cfg.weight_decay)
         #    begin training
-        start_epoch = 1
+        start_epoch = cfg.start_epoch
         all_info = []
         for epoch in range(start_epoch, start_epoch + cfg.max_epoch):
             if epoch in cfg.lr_plan:
@@ -337,38 +357,40 @@ if __name__ == '__main__':
                 model.savemodel(filepath)
                 para_path = filepath
 
-            if epoch > 10:
-                if abs(all_info[epoch - start_epoch]['loss'] - all_info[epoch - start_epoch - 1][
+            if epoch > 10+start_epoch:
+                if abs(all_info[epoch-start_epoch]['loss'] - all_info[epoch-start_epoch - 1][
                     'loss']) < cfg.break_line:
                     break
-    if cfg.train_mode == 1 or cfg.train_mode == 2:
+    elif cfg.train_mode == 1 or 2:
         params = {
             'batch_size': cfg.batch_size,
             'shuffle': True
         }
         train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.new_collate, **params)
         test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.new_collate, **params)
-        # confirm the model parameter loading path from stage1
-        if cfg.train_mode == 1:
-            para_path = cfg.para_load_path
         #    build model
-        model = LinkNet1(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device, **cfg.model_para)  # type: LinkNet1
+        model = LinkNet1(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device,
+                         **cfg.model_para)  # type: LinkNet1
         model.to(device=device)
         model.train()
+        # load model parameter from the path in mode 2
+        if cfg.train_mode == 2:
+            para_path = cfg.para_load_path
+            model.loadmodel(para_path, 1)
         #    optimizer implement
         params_group = [
-                {"params": model.baselayer.backbone_net.parameters()},
-                {"params": model.baselayer.mod_embed.parameters()},
-                {"params": model.read_actions.parameters()},
-                {"params": model.read_activities.parameters()},
-                {"params": model.linklayer.parameters()}
-            ]
+            {"params": model.baselayer.backbone_net.parameters()},
+            {"params": model.baselayer.mod_embed.parameters()},
+            {"params": model.read_actions.parameters()},
+            {"params": model.read_activities.parameters()},
+            {"params": model.linklayer.parameters()}
+        ]
         optimizer = optim.Adam(
             params_group,
             lr=cfg.train_learning_rate,
             weight_decay=cfg.weight_decay)
         #    begin training
-        start_epoch = 1
+        start_epoch = cfg.start_epoch
         all_info = []
         for epoch in range(start_epoch, start_epoch + cfg.max_epoch):
             if epoch in cfg.lr_plan:
@@ -377,13 +399,14 @@ if __name__ == '__main__':
             #  each epoch in the iteration
             model.train()
             train_result_info = VolleyballEpoch2('train', train_loader, model, device, cfg=cfg, optimizer=optimizer,
-                                                epoch=epoch).main()
+                                                 epoch=epoch).main()
             for each_info in train_result_info:
                 log.fPrint('%s:%s' % (str(each_info), str(train_result_info[each_info])))
             all_info.append(train_result_info)
             TBWriter.add_scalar('train1_loss', train_result_info['loss'], epoch)
-            TBWriter.add_scalar('train1_acc', train_result_info['actions_acc'], epoch)
-            TBWriter.add_scalars('train1_acc_each', dict(zip(ACTIONS, train_result_info['actions_each_acc'])), epoch)
+            TBWriter.add_scalar('train1_action', train_result_info['actions_acc'], epoch)
+            TBWriter.add_scalar('train1_activity', train_result_info['activities_acc'], epoch)
+            TBWriter.add_scalars('train1_action_each', dict(zip(ACTIONS, train_result_info['actions_each_acc'])), epoch)
             #  test in each interval times
             if epoch % cfg.test_interval_epoch == 0 or epoch == start_epoch:
                 model.train(False)
@@ -391,19 +414,20 @@ if __name__ == '__main__':
                 for each_info in test_result_info:
                     log.fPrint('%s:%s' % (str(each_info), str(test_result_info[each_info])))
                 TBWriter.add_scalar('test1_loss', test_result_info['loss'], epoch)
-                TBWriter.add_scalar('test1_acc', test_result_info['actions_acc'], epoch)
-                TBWriter.add_scalars('test1_acc_each', dict(zip(ACTIONS, test_result_info['actions_each_acc'])),
+                TBWriter.add_scalar('test1_action', test_result_info['actions_acc'], epoch)
+                TBWriter.add_scalar('test1_activity', test_result_info['activities_acc'], epoch)
+                TBWriter.add_scalars('test1_action_each', dict(zip(ACTIONS, test_result_info['actions_each_acc'])),
                                      epoch)
                 filepath = cfg.outputPath + '/model/stage%d_epoch%d_%.2f%%.pth' % (
                     1, epoch, test_result_info['actions_acc'])
                 model.savemodel(filepath)
 
-            if epoch > 10:
-                if abs(all_info[epoch - start_epoch]['loss'] - all_info[epoch - start_epoch - 1][
+            if epoch > 10+start_epoch:
+                if abs(all_info[epoch-start_epoch]['loss'] - all_info[epoch-start_epoch-1][
                     'loss']) < cfg.break_line:
                     break
     if cfg.train_mode == 'T':
-        a = torch.randn(2,5,1024)
-        _,a=routing(a)
+        a = torch.randn(2, 5, 1024)
+        _, a = routing(a)
         print(a)
     TBWriter.close()

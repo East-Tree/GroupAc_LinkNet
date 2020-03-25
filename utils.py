@@ -8,8 +8,25 @@ import numpy as np
 def vec_norm(input0):
     x = torch.pow(input0, 2.0)
     x = torch.sum(x, dim=-1, keepdim=True)
+    # to prevent NaN appearing, replace all Inf and 0 with 1.
+    x = torch.where(x==0,torch.ones(size=x.size(),dtype=x.dtype,device=x.device),x)
+    x = torch.where(x==float('Inf'), torch.ones(size=x.size(), dtype=x.dtype, device=x.device), x)
     x = torch.sqrt(x)
+    if np.any(np.isnan(x.cpu().detach().numpy())):
+        a = 1
+        pass
     return torch.div(input0, x)
+
+# a softmax funtion with changeable factor
+def softmax0(input0, power=100.0, dim=0):
+    out = torch.pow(power, input0)
+    summ = torch.sum(out, dim=dim, keepdim=True)
+    divv = torch.div(out, summ)
+
+    if np.any(np.isnan(divv.cpu().detach().numpy())):
+        a = 1
+        pass
+    return divv
 
 # dynamic routing algorithm
 def routing(input0, weight0=None, times=3):
@@ -23,20 +40,30 @@ def routing(input0, weight0=None, times=3):
         weight = torch.zeros(input0.size()[0:2], device=input0.device, dtype=input0.dtype)
     else:
         weight = weight0.to(device=input0.device, dtype=input0.dtype)
+    weight1 = softmax0(weight, dim=-1)
     vec = None
-    input_norm = vec_norm(input0)
+    input_norm = vec_norm(input0).detach()
     for i in range(times):
-        weight1 = F.softmax(weight, dim=-1)  # (batch,num)
-        vec = torch.mul(input0, weight1.unsqueeze(2))    # (batch, num, fea)
+        weight = torch.add(weight, weight1)
+        vec = torch.mul(input_norm, weight1.unsqueeze(2))    # (batch, num, fea)
         vec = torch.sum(vec, dim=1)
         vec1 = vec.unsqueeze(1)    # (batch, 1, fea)
         vec1 = vec_norm(vec1)     # (batch, 1, fea)
-        weight1 = torch.mul(input0, vec1)    # (batch, num, fea)
+        weight1 = torch.mul(input_norm, vec1)    # (batch, num, fea)
         weight1 = torch.sum(weight1, dim=-1)  # (batch,num)
-        weight1 = F.softmax(weight1, dim=-1)    # (batch,num)
-        weight = torch.add(weight, weight1)
+        weight1 = softmax0(weight1, dim=-1)    # (batch,num)
 
-    return vec, weight
+    weight1 = weight1.detach()
+    vec = torch.mul(input0, weight1.unsqueeze(2))  # (batch, num, fea)
+    vec = torch.sum(vec, dim=1)
+
+
+    return vec, weight1
+
+def thread_max(input0, factor=0.1):
+    new = torch.where(input0 > factor, input0, torch.zeros(input0.size(), dtype=input0.dtype, device=input0.device))
+    # normalize the value's sum into 1
+
 
 def prep_images(images):
     """
@@ -166,9 +193,22 @@ def adjust_lr(optimizer, lr_plan, logger):
     if 0 in lr_plan:
         for i in optimizer.param_groups:
             i['lr'] = lr_plan[0]
+            if lr_plan[0] == 0:
+                for each_para in i["params"]:
+                    each_para.requires_grad = False
+            else:
+                for each_para in i["params"]:
+                    each_para.requires_grad = True
+
     else:
         for param_group in lr_plan:
             optimizer.param_groups[param_group-1]['lr'] = lr_plan[param_group]
+            if lr_plan[param_group] == 0:
+                for each_para in optimizer.param_groups[param_group-1]["params"]:
+                    each_para.requires_grad = False
+            else:
+                for each_para in optimizer.param_groups[param_group-1]["params"]:
+                    each_para.requires_grad = True
 
 
 def label_gather(cate_size, obj_tensor, res_tensor):
@@ -305,8 +345,8 @@ class GeneralAverageMeterTensor(object):
 
         self.correct_rate_each = (self.correct_num_each / self.all_num_each).cpu()
 
-        self.correct_num = int(torch.sum(self.correct_num_each))
-        self.all_num = int(torch.sum(self.all_num_each))
+        self.correct_num = (torch.sum(self.correct_num_each))
+        self.all_num = (torch.sum(self.all_num_each))
         self.correct_rate = (self.correct_num / self.all_num)
 
 class Timer(object):

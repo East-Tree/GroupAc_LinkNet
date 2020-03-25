@@ -171,8 +171,10 @@ class Config2(object):
         1: manually split 2: random split with stable seed 3: random split with random seed
         """
         self.split_mode = 1
-        self.train_seqs = [1, 3, 6, 7, 10, 13, 15, 16, 18, 22, 23, 31, 32, 36, 38, 39, 40, 41, 42, 48, 50, 52, 53, 54,
-                           0, 2, 8, 12, 17, 19, 24, 26, 27, 28, 30, 33, 46, 49, 51]  # video id list of train set
+
+        #self.train_seqs = [1,2,3]
+        #self.test_seqs = [4,5]
+        self.train_seqs = [1, 3, 6, 7, 10, 13, 15, 16, 18, 22, 23, 31, 32, 36, 38, 39, 40, 41, 42, 48, 50, 52, 53, 54, 0, 2, 8, 12, 17, 19, 24, 26, 27, 28, 30, 33, 46, 49, 51]# video id list of train set
         self.test_seqs = [4, 5, 9, 11, 14, 20, 21, 25, 29, 34, 35, 37, 43, 44, 45, 47]  # video id list of test set
 
         # model parameter
@@ -182,13 +184,14 @@ class Config2(object):
         self.train_backbone = False  # if freeze the feature extraction part of network, True for stage 1, False for stage 2
         self.out_size = 87, 157  # output feature map size of backbone
         self.emb_features = 1056
-        self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200221-00/model/stage1_epoch55_29.64%.pth'
+        self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-01/model/stage1_epoch185_71.23%.pth'
         self.model_para = {
-            'person_fea_dim': 512,
+            'person_fea_dim':1024,
             'relation_fea_dim': 512,
             'dropout_prob': 0.3,
             'feature1_renew_rate': 0.2,
-            'biasNet_channel': 8,
+            'biasNet_channel_pos': 4,
+            'biasNet_channel_dis': [0, 0.25, 1],
             'iterative_times': 1,
             'routing_times': 3,
             'pooling_method': 'ave'
@@ -199,9 +202,10 @@ class Config2(object):
         1: fully linknet model train
         2: train linknet with pre-train backbone part
         """
-        self.train_mode = 0
+        self.train_mode = 2
         self.goon = False
-        self.goon_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_epoch100_55.18%.pth'
+        self.goon_path1 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_epoch100_55.18%.pth'
+        self.goon_path2 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_epoch100_55.18%.pth'
         """
         the relative parameter for stage1
         stage1 is a pre-train for self action feature output and readout 
@@ -214,7 +218,7 @@ class Config2(object):
         self.weight_decay = 0.01
         self.break_line = 1e-5
         self.start_epoch = 1
-        self.max_epoch = 200
+        self.max_epoch = 160
         # testing parameter
         self.test_batch_size = 4
         self.test_interval_epoch = 5
@@ -222,9 +226,10 @@ class Config2(object):
         # loss function parameter
         # self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
         self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.2, 1.]
-        self.actions_loss_weight = 2.  # weight for actions in loss function
+        self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.activities_loss_weight = 2.
+        self.focal_loss_factor = 0.3
 
         self.lr_plan = None
         self.loss_plan = None
@@ -234,7 +239,6 @@ class Config2(object):
 
         self.loss_apply()
         self.lr_apply()
-
 
     def initial(self):
 
@@ -273,7 +277,7 @@ class Config2(object):
 
     def lr_apply(self):
         lr_plan1 = {
-            25: {
+            1: {
                 1: 2e-5, 2: 2e-5, 3: 2e-5, 4: 2e-5, 5: 2e-5
             }
         }
@@ -293,20 +297,35 @@ class Config2(object):
         }
         lr_plan3 = {
             1: {
-                1: 2e-4, 2: 2e-4, 3: 2e-4
+                1: 0, 2: 2e-5, 3: 2e-5, 4: 2e-5, 5: 2e-5
             },
-            25: {
-                1: 1e-4, 2: 1e-4, 3: 1e-4
-            },
-            60: {
-                1: 2e-5, 2: 5e-5, 3: 5e-5
+            6: {
+                1: 0, 2: 0, 3: 2e-4, 4: 2e-4, 5: 2e-4
             },
             80: {
-                1: 1e-5, 2: 2e-5, 3: 2e-5
+                1: 0, 2: 0, 3: 1e-4, 4: 1e-4, 5: 1e-4
+            },
+            200: {
+                1: 0, 2: 0, 3: 5e-5, 4: 5e-5, 5: 5e-5
+            },
+            300: {
+                1: 0, 2: 0, 3: 2e-5, 4: 2e-5, 5: 2e-5
             }
         }
         lr_plan4 = {
             1: {
+                0: 0
+            },
+            10: {
+                0: 0
+            },
+            60: {
+                0: 1e-4
+            },
+            80: {
+                0: 5e-5
+            },
+            110: {
                 0: 2e-5
             }
         }
@@ -315,4 +334,4 @@ class Config2(object):
         elif self.train_mode == 1:
             self.lr_plan = lr_plan4
         elif self.train_mode == 2:
-            self.lr_plan = lr_plan2
+            self.lr_plan = lr_plan3

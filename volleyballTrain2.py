@@ -47,6 +47,10 @@ class Focalloss(nn.Module):
         loss = (-1) * focal_weight * input_logsoft
         loss = torch.mean(loss, dim=0)
 
+        if np.any(np.isnan(loss.cpu().detach().numpy())):
+            a = 1
+            pass
+
         return loss, focal_weight
 
 
@@ -172,7 +176,9 @@ class VolleyballEpoch2():
 
         if self.mode == 'train':
             print("Training in epoch %s" % self.epoch)
+            i = 0
             for batch_data in tqdm(self.data_loader):
+                i = i+1
                 self.baseprocess(batch_data)
                 # Optim
                 self.optimizer.zero_grad()
@@ -193,6 +199,7 @@ class VolleyballEpoch2():
                 'activities_loss_weight': self.activities_loss_weight.correct_rate_each.numpy().tolist(),
                 'activities_each_num': self.activities_meter.all_num_each
             }
+
         elif self.mode == 'test':
             print("Testing in test dataset")
             with torch.no_grad():
@@ -243,11 +250,14 @@ class VolleyballEpoch2():
         #   focal loss
         focal_loss = Focalloss()
         actions_loss, action_loss_w = focal_loss(actions_scores, actions_in, device0=self.device,
-                                                 weight=actions_weights)
+                                                 weight=actions_weights, attenuate=cfg.focal_loss_factor)
         activities_loss, activi_loss_w = focal_loss(activities_scores, activities_in, device0=self.device,
-                                                    weight=activities_weights)
+                                                    weight=activities_weights, attenuate=cfg.focal_loss_factor)
         # Total loss
         self.total_loss = self.cfg.actions_loss_weight * actions_loss + self.cfg.activities_loss_weight * activities_loss
+        if np.any(np.isnan(self.total_loss.cpu().detach().numpy())):
+            a = 1
+            pass
         self.loss_meter.update(self.total_loss.item(), batch_size)
         # Get accuracy
         self.actions_meter.update(actions_result, actions_in)
@@ -269,6 +279,8 @@ if __name__ == '__main__':
     # create logger object
     log = utils.Logger(cfg.outputPath)
     log.fPrint(introduce)
+    for item in cfg.__dict__:
+        log.fPrint('%s:%s' % (str(item), str(cfg.__dict__[item])))
     # create tensorboard writer
     TBWriter = SummaryWriter(logdir=cfg.outputPath, comment='tensorboard')
     # device state
@@ -313,9 +325,6 @@ if __name__ == '__main__':
         model = SelfNet2(cfg.imageSize, cfg.crop_size, cfg.actions_num, device, **cfg.model_para)  # type: SelfNet2
         model.to(device=device)
         model.train()
-        # continue work
-        if cfg.goon is True:
-            model.loadmodel(cfg.goon_path)
         #    optimizer implement
         optimizer = optim.Adam(
             [
@@ -325,6 +334,10 @@ if __name__ == '__main__':
             ],
             lr=cfg.train_learning_rate,
             weight_decay=cfg.weight_decay)
+        # continue work
+        if cfg.goon is True:
+            model.loadmodel(cfg.goon_path1)
+            optimizer.load_state_dict(torch.load(cfg.goon_path2))
         #    begin training
         start_epoch = cfg.start_epoch
         all_info = []
@@ -421,6 +434,9 @@ if __name__ == '__main__':
                 filepath = cfg.outputPath + '/model/stage%d_epoch%d_%.2f%%.pth' % (
                     1, epoch, test_result_info['actions_acc'])
                 model.savemodel(filepath)
+                filepath = cfg.outputPath + '/model/stage%d_optimizer_epoch%d.pth' % (
+                    1, epoch)
+                torch.save(optimizer.state_dict(), filepath)
 
             if epoch > 10+start_epoch:
                 if abs(all_info[epoch-start_epoch]['loss'] - all_info[epoch-start_epoch-1][

@@ -505,13 +505,15 @@ class LinkNet1(nn.Module):
         )
         #  posi-bias convolution model group
         self.linklayer = []
-        self.linklayer.append(PosiBiasNet(self.arch_para['person_fea_dim'], self.arch_para['relation_fea_dim'],
-                                        device=self.device, inter_num=self.arch_para['biasNet_channel']))
+        self.linklayer.append(PosiBiasNet2(self.arch_para['person_fea_dim'], self.arch_para['relation_fea_dim'],
+                                           device=self.device, inter_num=self.arch_para['biasNet_channel_pos'],
+                                           inter_dis=self.arch_para['biasNet_channel_dis']))
         if self.arch_para['iterative_times'] > 1:
             i = 1
             while i < self.arch_para['iterative_times']:
-                self.linklayer.append(PosiBiasNet(self.arch_para['relation_fea_dim'], self.arch_para['relation_fea_dim'],
-                                                device=self.device, inter_num=self.arch_para['biasNet_channel']))
+                self.linklayer.append(
+                    PosiBiasNet(self.arch_para['relation_fea_dim'], self.arch_para['relation_fea_dim'],
+                                device=self.device, inter_num=self.arch_para['biasNet_channel']))
         self.linklayer = nn.ModuleList(self.linklayer)
         # initial network parameter
         for m in self.modules():  # network initial for linear layer
@@ -523,7 +525,7 @@ class LinkNet1(nn.Module):
         arch_para = {
             'feature1_renew_rate': 0.2,
             'dropout_prob': 0.3,
-            'biasNet_channel': 8,
+            'biasNet_channel_pos': 8,
             'iterative_times': 3,
             'pooling_method': 'ave',
             'routing_times': 3
@@ -586,7 +588,7 @@ class LinkNet1(nn.Module):
                 vec0 = self.linklayer[j](vec0, batch_data[1][i])  # (ob_num(sink),ob_num(source),out_dim)
                 vec0, coef0 = routing(vec0, times=self.arch_para['routing_times'])
             # coef0 (sink, source, 1)
-            coef0 = torch.softmax(coef0, dim=0)  # (source, 1)
+            coef0, _ = torch.max(coef0, dim=0)  # (source, 1)
             # concatenate final person feature and group feature
             person_fea = torch.cat((person_fea0[datum:datum + person_num[i]], vec0), dim=1)
             group_fea = pooling_func(vec0, method=self.arch_para['pooling_method'], other=coef0).unsqueeze(dim=0)
@@ -775,9 +777,11 @@ class PosiBiasNet(nn.Module):
         baseAngel = math.pi / self.inter_num
         self.index_vector = torch.tensor(
             [[math.sin(baseAngel * i), math.cos(baseAngel * i)] for i in range(self.inter_num)]).to(device=device)
-        self.index_vector = torch.transpose(self.index_vector,0,1) # [2, inter_num]
+        self.index_vector = torch.transpose(self.index_vector, 0, 1)  # [2, inter_num]
+        self.index_vector.requires_grad_(False)
         # network layer
         self.layer1 = nn.Linear(self.input_dim, self.output_dim * self.inter_num)
+        self.layer2 = nn.Linear(self.input_dim, self.output_dim)
 
     def forward(self, input, index):
         """
@@ -791,10 +795,12 @@ class PosiBiasNet(nn.Module):
         """
         # network forward
         intern1 = self.layer1(input)  # (ob_num, out_dim*inter_num)
-        #intern1 = intern1.to(device=self.device)
+        intern2 = self.layer2(input)  # (ob_num, out_dim)
+        # intern1 = intern1.to(device=self.device)
 
         # calculate the relative coordinate between each objects
         cood0 = index.reshape(-1, self.index_dim)  # (ob_num, 4[x1,y1,x2,y2])
+        cood0.requires_grad_(False)
         cood0 = cood0.to(device=self.device)
 
         op1 = torch.tensor([[0.5, 0], [0, 0.5], [0.5, 0], [0, 0.5]], device=self.device)
@@ -813,8 +819,105 @@ class PosiBiasNet(nn.Module):
 
         # doing batch matrix multiple
         intern1 = intern1.reshape(object_num, self.output_dim, -1)  # (ob_num(source), out_dim, inter_num)
-        intern1 = torch.matmul(intern1, coef0.transpose(1, 2).to(dtype=intern1.dtype))  # (ob_num(source),out_dim,ob_num(sink))
+        intern1 = torch.matmul(intern1,
+                               coef0.transpose(1, 2).to(dtype=intern1.dtype))  # (ob_num(source),out_dim,ob_num(sink))
         intern1 = torch.transpose(intern1, 1, 2)  # (ob_num(source),ob_num(sink),out_dim)
         intern1 = torch.transpose(intern1, 0, 1)  # (ob_num(sink),ob_num(source),out_dim)
+
+        # replace diagonal tensors with self embedding tensor
+        dia_index = torch.tensor([i * object_num for i in range(object_num)], requires_grad=False, device=self.device)
+        intern1 = intern1.reshape(-1, self.output_dim).index_copy(0, dia_index, intern2)
+        intern1 = intern1.reshape(object_num, object_num, -1)
+
+        return intern1
+
+
+# an isologue with biasnet, here the index part is the special position
+class PosiBiasNet2(nn.Module):
+    def __init__(self, input_dim, output_dim, device=None, index_dim=4, inter_num=4, inter_dis=None):
+        super().__init__()
+        self.input_dim = input_dim
+        self.index_dim = index_dim  # absolute coordinate (x,y) [0,1]^2
+        self.output_dim = output_dim
+        self.device = device
+        self.inter_num = inter_num
+        self.inter_dis = inter_dis
+        if inter_dis is None:
+            self.inter_dis_num = 1
+        else:
+            self.inter_dis_num = len(inter_dis) - 1
+
+        # index vector generate
+        baseAngel = (2 * math.pi) / self.inter_num
+        self.index_vector = torch.tensor(
+            [[math.cos(baseAngel * i), math.sin(baseAngel * i)] for i in range(self.inter_num)]).to(device=device)
+        self.index_vector = torch.transpose(self.index_vector, 0, 1)  # [2, inter_num]
+        self.index_vector.requires_grad_(False)
+        # network layer
+        self.layer1 = nn.Sequential(
+            nn.Linear(self.input_dim, self.output_dim * self.inter_num * self.inter_dis_num),
+            nn.Tanh()
+        )
+
+        self.layer2 = nn.Sequential(
+            nn.Linear(self.input_dim, self.output_dim),
+            nn.Tanh()
+        )
+
+    def forward(self, input, index):
+        """
+        :param parallel:
+        :type index: torch.tensor (num, index_dim)
+        :type input: torch.tensor
+        """
+        object_num = input.size()[0]
+        """
+        in parallel mode, one batch only contains a group of feature,  the result will generated between each pairs of features
+        """
+        # network forward
+        intern1 = self.layer1(input)  # (ob_num, out_dim*inter_num)
+        intern2 = self.layer2(input)  # (ob_num, out_dim)
+        # intern1 = intern1.to(device=self.device)
+
+        # calculate the relative coordinate between each objects
+        cood0 = index.reshape(-1, self.index_dim)  # (ob_num, 4[x1,y1,x2,y2])
+        cood0.requires_grad_(False)
+        cood0 = cood0.to(device=self.device)
+
+        op1 = torch.tensor([[0.5, 0], [0, 0.5], [0.5, 0], [0, 0.5]], device=self.device)
+
+        cood0 = torch.mm(cood0, op1.to(dtype=cood0.dtype))  # (ob_num, 2[x,y])
+        cood0 = cood0.repeat(object_num, 1, 1)  # (ob_num(repeat), ob_num, 2)
+        cood0 = torch.transpose(cood0, 0, 1) - cood0  # (ob_num(source),ob_num(sink),2[Xsi-Xso,Ysi-Yso]))
+        coodN = torch.norm(cood0, dim=2)
+        cood0 = F.normalize(cood0, p=2, dim=2)  # normalize cood0 with norm2
+
+        # calculate the relative coefficient between relative coordinate and index vector
+        coef0 = torch.mm(cood0.reshape(-1, 2),
+                         self.index_vector.to(
+                             dtype=cood0.dtype))  # (ob_num(so)*ob_num(si),inter_num)
+        #   delete negative value
+        coef0 = torch.where(coef0 > 0, coef0, torch.zeros(coef0.size(), device=coef0.device,dtype=coef0.dtype))
+        coef0 = coef0.reshape(object_num, object_num, -1)  # (ob_num(so),ob_num(si),inter_num)
+
+        # distance differential
+        coef1 = []
+        for i in range(self.inter_dis_num):
+            x = ((coodN >= self.inter_dis[i]) & (coodN < self.inter_dis[i + 1])).to(dtype=coef0.dtype)
+            x = torch.mul(coef0, x.unsqueeze(2))  # (ob_num(so),ob_num(si),inter_num)
+            coef1.append(x)
+        coef1 = torch.cat(coef1, dim=2)  # (ob_num(so),ob_num(si),inter_num*inter_dis_num)
+
+        # doing batch matrix multiple
+        intern1 = intern1.reshape(object_num, self.output_dim, -1)  # (ob_num(source), out_dim, inter_num)
+        intern1 = torch.matmul(intern1,
+                               coef1.transpose(1, 2).to(dtype=intern1.dtype))  # (ob_num(source),out_dim,ob_num(sink))
+        intern1 = torch.transpose(intern1, 1, 2)  # (ob_num(source),ob_num(sink),out_dim)
+        intern1 = torch.transpose(intern1, 0, 1)  # (ob_num(sink),ob_num(source),out_dim)
+
+        # replace diagonal tensors with self embedding tensor
+        dia_index = torch.tensor([i * (object_num+1) for i in range(object_num)], requires_grad=False, device=self.device)
+        intern1 = intern1.reshape(-1, self.output_dim).index_copy(0, dia_index, intern2)
+        intern1 = intern1.reshape(object_num, object_num, -1)
 
         return intern1

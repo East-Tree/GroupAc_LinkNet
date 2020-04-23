@@ -17,8 +17,12 @@ def vec_norm(input0):
         pass
     return torch.div(input0, x)
 
+def vec_squash(input0):
+    input_norm = torch.norm(input0, dim=-1, keepdim=True)
+    return input0 * input_norm / (1+input_norm**2)
+
 # a softmax funtion with changeable factor
-def softmax0(input0, power=100.0, dim=0):
+def softmax0(input0, power=10.0, dim=0):
     out = torch.pow(power, input0)
     summ = torch.sum(out, dim=dim, keepdim=True)
     divv = torch.div(out, summ)
@@ -28,6 +32,21 @@ def softmax0(input0, power=100.0, dim=0):
         pass
     return divv
 
+def softmaxS(input0, dim=0):
+    x = torch.softmax(input0, dim=dim)
+    ave = 1. / input0.size()[dim]
+    x = torch.where(x<ave, torch.zeros(input0.size(),device=input0.device,dtype=input0.dtype),x)
+
+    summa = x.sum(dim=dim, keepdim=True)
+    x = torch.div(x, summa)
+
+    return x
+
+def noNegmax(input0, dim=-1):
+    x = torch.where(input0>0, input0, torch.zeros(input0.size(), device=input0.device,dtype=input0.dtype))
+    x = F.normalize(x, p=1, dim=dim)
+
+    return  x
 # dynamic routing algorithm
 def routing(input0, weight0=None, times=3):
     """
@@ -36,29 +55,88 @@ def routing(input0, weight0=None, times=3):
     :param times:
     :return:
     """
+    input0d = input0.detach()
     if weight0 is None:
-        weight = torch.zeros(input0.size()[0:2], device=input0.device, dtype=input0.dtype)
+        weight = torch.ones(input0.size()[0:2], device=input0.device, dtype=input0.dtype)
     else:
         weight = weight0.to(device=input0.device, dtype=input0.dtype)
-    weight1 = softmax0(weight, dim=-1)
-    vec = None
-    input_norm = vec_norm(input0).detach()
+    weight = F.softmax(weight * 10., dim=1)
     for i in range(times):
-        weight = torch.add(weight, weight1)
-        vec = torch.mul(input_norm, weight1.unsqueeze(2))    # (batch, num, fea)
-        vec = torch.sum(vec, dim=1)
-        vec1 = vec.unsqueeze(1)    # (batch, 1, fea)
-        vec1 = vec_norm(vec1)     # (batch, 1, fea)
-        weight1 = torch.mul(input_norm, vec1)    # (batch, num, fea)
+        weight1 = F.normalize(weight, p=1, dim=-1)
+        vec = torch.mul(input0d, weight1.unsqueeze(2))  # (batch, num, fea)
+        vec = torch.sum(vec, dim=1, keepdim=True)  # (batch, 1, fea)
+        weight1 = torch.mul(input0d, vec)  # (batch, num, fea)
         weight1 = torch.sum(weight1, dim=-1)  # (batch,num)
-        weight1 = softmax0(weight1, dim=-1)    # (batch,num)
+        weight1 = F.softmax(weight1 * 10, dim=-1)
+        weight = torch.add(weight, weight1)
 
-    weight1 = weight1.detach()
-    vec = torch.mul(input0, weight1.unsqueeze(2))  # (batch, num, fea)
-    vec = torch.sum(vec, dim=1)
+    weight = F.normalize(weight, p=1, dim=-1)
+    vec = torch.mul(input0, weight.unsqueeze(2))  # (batch, num, fea)
+    vec1 = torch.sum(vec, dim=1)  # (batch, fea)
 
+    return vec1, weight
 
-    return vec, weight1
+# dynamic routing algorithm for linkNet3
+def routing_link3(input0, vec0, weight0=None, times=3):
+    """
+    :param input0: (batch, num, fea)
+    :param weight0: (batch, num)
+    :param times:
+    :return:
+    """
+    input0d = input0.detach()
+    vec0d = vec0.detach()
+    if weight0 is None:
+        weight = torch.mul(input0d, vec0d.unsqueeze(1))
+        weight = torch.sum(weight, dim=-1)
+    else:
+        weight = weight0.to(device=input0.device, dtype=input0.dtype)
+    weight = F.softmax(weight*10., dim=1)
+    for i in range(times):
+        weight1 = F.normalize(weight, p=1, dim=-1)
+        vec = torch.mul(input0d, weight1.unsqueeze(2))    # (batch, num, fea)
+        vec = torch.sum(vec, dim=1, keepdim=True)  # (batch, 1, fea)
+        weight1 = torch.mul(input0d, vec)    # (batch, num, fea)
+        weight1 = torch.sum(weight1, dim=-1)  # (batch,num)
+        weight1 = F.softmax(weight1*10, dim=-1)
+        weight = torch.add(weight, weight1)
+
+    weight = F.normalize(weight, p=1, dim=-1)
+    vec = torch.mul(input0, weight.unsqueeze(2))  # (batch, num, fea)
+    vec1 = torch.sum(vec, dim=1)  # (batch, fea)
+
+    #vec2 = vec0  # (batch, fea)
+    vec2 = (vec0 + vec1)/2.  # (batch, fea)
+    # calculate the loss KL divergence
+    loss = F.kl_div((vec1+1e-12).log(), vec0, reduction='sum')
+    # calculate the coefficient matrix
+    coef0 = torch.mul(vec0d, vec2)
+    coef0 = torch.sum(coef0, dim=-1).detach()  # (batch)
+    coef1 = torch.mul(input0d, vec2.unsqueeze(1))
+    coef1 = torch.sum(coef1, dim=-1).detach()  # (batch,num(batch-1))
+    batch = vec0.size()[0]
+    coef1 = torch.cat((coef0[:batch-1].unsqueeze(1), coef1.reshape(batch-1,batch)), dim=1)  # (batch-1, batch+1)
+    coef1 = torch.cat((coef1.reshape(-1),coef0[-1].unsqueeze(0)), dim=0)  # (batch^2,1)
+
+    return vec2, coef1.reshape(batch,batch), loss
+
+def group_max(input0, coef0, max_n=3):
+    """
+    :param input0:  (batch, fea)
+    :param cooef0:  (batch, batch)
+    :param max_n:
+    :return:  (n, fea)
+    """
+    batch_num = input0.size()[0]
+    dia_index = torch.tensor([i * (batch_num + 1) for i in range(batch_num)], requires_grad=False, device=coef0.device)
+    dia_element = torch.index_select(coef0.reshape(-1,1), 0, dia_index)
+    coef_sum = torch.sum(coef0, dim=0)
+    coef_sum = coef_sum - dia_element.reshape(-1)
+    sort, index = torch.sort(coef_sum, dim=-1, descending=True)
+    max_index = index.reshape(-1)[0:max_n]
+    out = torch.index_select(input0, 0, max_index)
+
+    return out
 
 def thread_max(input0, factor=0.1):
     new = torch.where(input0 > factor, input0, torch.zeros(input0.size(), dtype=input0.dtype, device=input0.device))
@@ -348,6 +426,73 @@ class GeneralAverageMeterTensor(object):
         self.correct_num = (torch.sum(self.correct_num_each))
         self.all_num = (torch.sum(self.all_num_each))
         self.correct_rate = (self.correct_num / self.all_num)
+
+class CoefMatrixMeter(object):
+
+    def __init__(self, actions_num, activity_num=None):
+        self.actions_num = actions_num
+        if activity_num == None:
+            self.activity_num = self.actions_num
+        else:
+            self.activity_num = activity_num
+        self.coef_value = torch.zeros([self.activity_num, self.actions_num],
+                                      dtype=torch.float)
+        self.coef_num = self.coef_value + 1e-10
+        self.coef_rate = self.coef_value / self.coef_num
+
+    def update(self, coef0, action_in0, activity_in0=None, mode = 0):
+        # coef0 list[(target, source), ...]
+        action_in = action_in0.detach().cpu()
+        if mode == 0:
+            activity_in = action_in
+        else:
+            activity_in = activity_in0.detach().cpu()
+        datum = 0
+        batch_datum = 0
+        for batch in coef0:
+            batch = batch.detach().cpu()
+            numi = batch.size()[0]
+            numj = batch.size()[1]
+            action_batch = action_in[datum:datum+numi]
+            if mode == 0:
+                activity_batch = action_batch
+            else:
+                activity_batch = activity_in[batch_datum].reshape(1).repeat(numi)
+            for i in range(numi):
+                for j in range(numj):
+                    self.coef_value[activity_batch[i]][action_batch[j]] += batch[i][j]
+                    self.coef_num[activity_batch[i]][action_batch[j]] += 1
+            datum += numi
+            batch_datum += 1
+        # return (source, target)
+        self.coef_rate = self.coef_value / self.coef_num
+
+class CorelationMeter(object):
+
+    def __init__(self, num):
+        self.class_all = torch.zeros(num, 1, dtype=torch.float)
+        self.class_all += 1e-12
+        self.class_each = torch.zeros(num,num, dtype=torch.float)
+
+        self.class_acc = self.class_each / self.class_all
+
+    def update(self, label, predict):
+        batch = label.size()[0]
+        for i in range(batch):
+            self.class_all[label[i], 0] += 1
+            self.class_each[label[i], predict[i]] += 1
+
+        self.class_acc = self.class_each / self.class_all
+
+class CrossrelaMeter(object):
+
+    def __init__(self, num1, num2):
+        self.activity_each = torch.zeros((num1, 1), dtype=torch.float) + 1e-12
+        self.action_each = torch.zeros((num1, num2), dtype=torch.float)
+        self.acc_each = self.action_each / self.activity_each
+
+    def update(self, tensor1, tensor2):
+        pass
 
 class Timer(object):
     """

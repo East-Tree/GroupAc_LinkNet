@@ -170,7 +170,13 @@ class Config2(object):
         """
         1: manually split 2: random split with stable seed 3: random split with random seed
         """
-        self.split_mode = 1
+        self.split_mode = 2
+        """
+        0. read the central frame from the sequence 
+        1. read all frames from the sequence
+        2. randomly read a frame from the sequence
+        """
+        self.dataset_mode = 0
 
         #self.train_seqs = [1,2,3]
         #self.test_seqs = [4,5]
@@ -184,28 +190,38 @@ class Config2(object):
         self.train_backbone = False  # if freeze the feature extraction part of network, True for stage 1, False for stage 2
         self.out_size = 87, 157  # output feature map size of backbone
         self.emb_features = 1056
-        self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-01/model/stage1_epoch185_71.23%.pth'
+
         self.model_para = {
-            'person_fea_dim':1024,
-            'relation_fea_dim': 512,
-            'dropout_prob': 0.3,
+            'person_fea_dim': 1024,
+            'relation_fea_dim': 256,
+            'general_fea_dim': 32,
+            'dropout_prob': 0.5,
             'feature1_renew_rate': 0.2,
-            'biasNet_channel_pos': 4,
-            'biasNet_channel_dis': [0, 0.25, 1],
+            'biasNet_channel_pos': 8,
+            'biasNet_channel_dis': [0, 0.15,0.3,0.5],
             'iterative_times': 1,
             'routing_times': 3,
-            'pooling_method': 'ave'
+            'pooling_method': 'ave',
+            'readout_max_num': 1
         }
         # training parameter
         """
         0: train the network with base backbone
         1: fully linknet model train
         2: train linknet with pre-train backbone part
+        3: train the linknet action version with pre-train backbone part
+        4: train the GCN with a pretrained action linknet 
+        5: silly version of linknet, generate intermediate variable -- state
+        6: pretrain of mode3
         """
-        self.train_mode = 2
+        self.train_mode = 6
+        self.pre_train = 1
+        self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200417-01/model/stage2_epoch38_67.36%.pth'
+        # self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200327-00/model/stage1_epoch25_75.13%new.pth'
+        # self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200412-00/model/stage1_epoch24_71.11%.pth'
         self.goon = False
-        self.goon_path1 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_epoch100_55.18%.pth'
-        self.goon_path2 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_epoch100_55.18%.pth'
+        self.goon_path1 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200325-01/model/stage1_epoch160_68.34%.pth'
+        self.goon_path2 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_optimizer_epoch160.pth'
         """
         the relative parameter for stage1
         stage1 is a pre-train for self action feature output and readout 
@@ -215,21 +231,23 @@ class Config2(object):
         self.renew_weight = False
         self.batch_size = 8
         self.train_learning_rate = 5e-5
-        self.weight_decay = 0.01
+        self.weight_decay = 0.005
         self.break_line = 1e-5
         self.start_epoch = 1
-        self.max_epoch = 160
+        self.max_epoch = 200
         # testing parameter
         self.test_batch_size = 4
-        self.test_interval_epoch = 5
+        self.test_interval_epoch = 2
 
         # loss function parameter
         # self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
-        self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.2, 1.]
+        self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
         self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-        self.activities_loss_weight = 2.
+        self.activities_loss_weight = 1.
         self.focal_loss_factor = 0.3
+        self.kl_loss_weight = 0
+        self.other_actions_loss_weight = 0.2
 
         self.lr_plan = None
         self.loss_plan = None
@@ -278,7 +296,10 @@ class Config2(object):
     def lr_apply(self):
         lr_plan1 = {
             1: {
-                1: 2e-5, 2: 2e-5, 3: 2e-5, 4: 2e-5, 5: 2e-5
+                1: 2e-5, 2: 2e-5, 3: 1e-5, 4: 2e-5
+            },
+            40:{
+                1: 1e-5, 2: 1e-5, 3: 1e-5, 4: 1e-5
             }
         }
         lr_plan2 = {
@@ -297,36 +318,75 @@ class Config2(object):
         }
         lr_plan3 = {
             1: {
-                1: 0, 2: 2e-5, 3: 2e-5, 4: 2e-5, 5: 2e-5
+                1: 0, 2: 0, 3: 0, 4: 0, 5: 2e-5
             },
             6: {
-                1: 0, 2: 0, 3: 2e-4, 4: 2e-4, 5: 2e-4
+                1: 0, 2: 0, 3: 0, 4: 0, 5: 2e-4
             },
             80: {
-                1: 0, 2: 0, 3: 1e-4, 4: 1e-4, 5: 1e-4
+                1: 0, 2: 0, 3: 0, 4: 0, 5: 1e-4
             },
             200: {
-                1: 0, 2: 0, 3: 5e-5, 4: 5e-5, 5: 5e-5
+                1: 0, 2: 0, 3: 2e-6, 4: 5e-6, 5: 5e-5
             },
             300: {
-                1: 0, 2: 0, 3: 2e-5, 4: 2e-5, 5: 2e-5
+                1: 0, 2: 0, 3: 1e-5, 4: 2e-5, 5: 2e-5
             }
         }
         lr_plan4 = {
             1: {
-                0: 0
+                0: 2e-5
+            }
+        }
+        lr_plan5 = {
+            1: {
+                1: 0, 2: 2e-5, 3: 2e-5, 4: 2e-5
             },
-            10: {
-                0: 0
-            },
-            60: {
-                0: 1e-4
+            6: {
+                1: 0, 2: 2e-4, 3: 2e-4, 4: 2e-4
             },
             80: {
-                0: 5e-5
+                1: 0, 2: 1e-4, 3: 1e-4, 4: 1e-4
             },
-            110: {
-                0: 2e-5
+            200: {
+                1: 0, 2: 5e-5, 3: 5e-5, 4: 5e-5
+            },
+            300: {
+                1: 0, 2: 2e-5, 3: 2e-5, 4: 2e-5
+            }
+        }
+        lr_plan6 = {
+            1: {
+                1: 0, 2: 0, 3: 0, 4: 0, 5: 2e-5, 6: 2e-5
+            },
+            6: {
+                1: 0, 2: 2e-6, 3: 2e-6, 4: 2e-6, 5: 1e-4, 6: 1e-4
+            },
+            40: {
+                1: 0, 2: 2e-6, 3: 2e-6, 4: 2e-6, 5: 5e-5, 6: 5e-5
+            },
+            80: {
+                1: 0, 2: 2e-6, 3: 2e-6, 4: 2e-6, 5: 2e-5, 6: 2e-5
+            },
+            120: {
+                1: 0, 2: 2e-6, 3: 2e-6, 4: 2e-6, 5: 1e-5, 6: 1e-5
+            }
+        }
+        lr_plan7 = {
+            1: {
+                1: 1e-6, 2: 2e-5, 3: 2e-5, 4: 1e-5, 5: 2e-5, 6: 2e-5
+            },
+            6: {
+                1: 1e-6, 2: 1e-4, 3: 1e-4, 4: 5e-5, 5: 1e-4, 6: 1e-4
+            },
+            40: {
+                1: 1e-6, 2: 5e-5, 3: 5e-5, 4: 2-5, 5: 5e-5, 6: 5e-5
+            },
+            80: {
+                1: 1e-7, 2: 2e-5, 3: 2e-5, 4: 1e-5, 5: 2e-5, 6: 2e-5
+            },
+            120: {
+                1: 1e-7, 2: 1e-5, 3: 1e-5, 4: 5e-6, 5: 1e-5, 6: 1e-5
             }
         }
         if self.train_mode == 0:
@@ -335,3 +395,11 @@ class Config2(object):
             self.lr_plan = lr_plan4
         elif self.train_mode == 2:
             self.lr_plan = lr_plan3
+        elif self.train_mode == 3:
+            self.lr_plan = lr_plan3
+        elif self.train_mode == 4:
+            self.lr_plan = lr_plan6
+        elif self.train_mode == 5:
+            self.lr_plan = lr_plan7
+        elif self.train_mode == 6:
+            self.lr_plan = lr_plan1

@@ -21,10 +21,19 @@ def new_collate(batch):
     # image:[sample1, sample2, ...]
     return [image, activities, actions, bbox]
 
+def randTimes(pro:float):
+    proInst = int(pro)
+    proFrac = pro - proInst
+    seed = random.random()
+    if seed<=proFrac:
+        return proInst+1
+    else:
+        return proInst
+
 
 # define the volleyball dataset class
 class VolleyballDataset(data.Dataset):
-    def __init__(self, cfg_dataPath, cfg_imagesize=(720, 1280), frameList = None):
+    def __init__(self, cfg_dataPath, cfg_imagesize=(720, 1280), frameList = None, augment=None):
         self.datasetPath = cfg_dataPath + '/volleyball'
         if frameList is None:
             self.frameList = list(range(55))  # generate reading list for volleyball dataset
@@ -160,7 +169,7 @@ class VolleyballDataset(data.Dataset):
         return self.NUM_ACTIONS, self.NUM_ACTIVITIES
 
 class VolleyballDatasetS(data.Dataset):
-    def __init__(self, cfg_dataPath, cfg_imagesize=(720, 1280), frameList = None, mode=0):
+    def __init__(self, cfg_dataPath, cfg_imagesize=(720, 1280), frameList=None, mode=0, dataagument=None):
         self.datasetPath = cfg_dataPath + '/volleyball'
         if frameList is None:
             self.frameList = list(range(55))  # generate reading list for volleyball dataset
@@ -168,6 +177,7 @@ class VolleyballDatasetS(data.Dataset):
             self.frameList = frameList
         # according to official document, the label bbox is corresponding to (720,1280)
         self.imagesize = cfg_imagesize
+        self.dataCate = [.0] * 9
         self.annotationData = self.readAnnotation()
         self.trackData = self.readTrack()
         self.allFrames = self.readAllFrames()
@@ -261,7 +271,10 @@ class VolleyballDatasetS(data.Dataset):
 
                     fileName = value[0]
                     activity = value[1]
-                    activity = [VolleyballDataset.activityToId(activity)]  # convert the activity to id number
+                    activity = VolleyballDataset.activityToId(activity)  # convert the activity to id number
+                    self.dataCate[activity] += 1
+                    activity = [activity]
+
                     value = value[2:]
                     # assert len(value)%5 == 0, 'the error occurs in %s at %s' % (fileName, annotationPath)
                     if len(value) % 5 != 0:
@@ -294,9 +307,14 @@ class VolleyballDatasetS(data.Dataset):
 
     def readAllFrames(self):
         frames = []
+        # calculate proportion for each categories
+        max = torch.max(torch.tensor(self.dataCate).float())
+        pro = max/torch.tensor(self.dataCate).float()
+
         for sid, anno in self.annotationData.items():
             for fid, subAnno in anno.items():
-                frames.append((sid, fid))
+                n = randTimes(float(pro[subAnno['group_activity']]))
+                frames.extend([(sid, fid)] * n)
         return frames
 
     def readSpecificFrame(self, frameIndex: tuple):

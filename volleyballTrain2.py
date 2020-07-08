@@ -148,7 +148,6 @@ class VolleyballEpoch():
         self.loss_meter.update(self.total_loss.item(), batch_size)
         self.actions_loss_weight.update(action_loss_w.squeeze(1), actions_in)
 
-
 class VolleyballEpoch2():
 
     def __init__(self, mode, data_loader, model, device, cfg=None, optimizer=None, epoch=0):
@@ -797,13 +796,13 @@ if __name__ == '__main__':
         test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.new_collate, **params)
         #    build model
         model = LinkNet1(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device,
-                         **cfg.model_para)  # type: LinkNet2
+                         **cfg.model_para)  # type: LinkNet1
         model.to(device=device)
         model.train()
         # load model parameter from the path in mode 2
         if cfg.train_mode == 2:
             para_path = cfg.para_load_path
-            model.loadmodel(para_path, 1)
+            model.loadmodel(para_path, mode=1)
         #    optimizer implement
         params_group = [
             {"params": model.baselayer.backbone_net.parameters()},
@@ -869,8 +868,8 @@ if __name__ == '__main__':
         train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.new_collate, **params)
         test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.new_collate, **params)
         #    build model
-        model = LinkNet3(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device,
-                         **cfg.model_para)  # type: LinkNet3
+        model = LinkNet1(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device,
+                         **cfg.model_para)  # type: LinkNet
         model.to(device=device)
         model.train()
         # load model parameter from the path in mode 2

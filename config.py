@@ -214,11 +214,11 @@ class Config2(object):
         5: silly version of linknet, generate intermediate variable -- state
         6: pretrain of mode3
         """
-        self.train_mode = 6
+        self.train_mode = 2
         self.pre_train = 1
-        self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200417-01/model/stage2_epoch38_67.36%.pth'
-        # self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200327-00/model/stage1_epoch25_75.13%new.pth'
-        # self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200412-00/model/stage1_epoch24_71.11%.pth'
+        #self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200417-01/model/stage2_epoch38_67.36%.pth'
+        self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200327-00/model/stage1_epoch25_75.13%new.pth'
+        #self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200412-00/model/stage1_epoch24_71.11%.pth'
         self.goon = False
         self.goon_path1 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200325-01/model/stage1_epoch160_68.34%.pth'
         self.goon_path2 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_optimizer_epoch160.pth'
@@ -318,16 +318,16 @@ class Config2(object):
         }
         lr_plan3 = {
             1: {
-                1: 0, 2: 0, 3: 0, 4: 0, 5: 2e-5
+                1: 0, 2: 2e-4, 3: 2e-4, 4: 2e-4, 5: 2e-4
             },
-            6: {
-                1: 0, 2: 0, 3: 0, 4: 0, 5: 2e-4
+            40: {
+                1: 0, 2: 1e-4, 3: 1e-4, 4: 1e-4, 5: 1e-4
             },
             80: {
-                1: 0, 2: 0, 3: 0, 4: 0, 5: 1e-4
+                1: 0, 2: 5e-5, 3: 5e-5, 4: 5e-5, 5: 5e-5
             },
-            200: {
-                1: 0, 2: 0, 3: 2e-6, 4: 5e-6, 5: 5e-5
+            120: {
+                1: 0, 2: 2e-5, 3: 2e-5, 4: 2e-5, 5: 2e-5
             },
             300: {
                 1: 0, 2: 0, 3: 1e-5, 4: 2e-5, 5: 2e-5

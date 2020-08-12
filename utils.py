@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import time
 import os
 import numpy as np
+import math
 
 # vector normalization
 def vec_norm(input0):
@@ -74,6 +75,9 @@ def routing(input0, weight0=None, times=3):
     vec = torch.mul(input0, weight.unsqueeze(2))  # (batch, num, fea)
     vec1 = torch.sum(vec, dim=1)  # (batch, fea)
 
+    # normalize output by 2d-norm
+    vec1 = F.normalize(vec1, p=2, dim=-1)
+
     return vec1, weight
 
 # dynamic routing algorithm for linkNet3
@@ -119,6 +123,17 @@ def routing_link3(input0, vec0, weight0=None, times=3):
     coef1 = torch.cat((coef1.reshape(-1),coef0[-1].unsqueeze(0)), dim=0)  # (batch^2,1)
 
     return vec2, coef1.reshape(batch,batch), loss
+
+def rela_entropy(input0):
+    """
+    :param input0: (batch, weight)
+    :return:
+    """
+    weight = F.normalize(input0,p=1,dim=-1)
+    num = input0.size()[-1]
+    max_entropy = torch.tensor([-(math.log(1/num))])
+    real_entropy = torch.sum(-(weight * ((weight+1e-9).log())),dim=-1)
+    return real_entropy / max_entropy
 
 def group_max(input0, coef0, max_n=3):
     """
@@ -311,6 +326,14 @@ class Logger(object):
     def getPath(self):
         return self.logPath
 
+class MaxItem(object):
+    def __init__(self):
+        self.maxitem = 0
+        self.maxnum = None
+    def update(self, item, num):
+        if self.maxitem < item:
+            self.maxitem = item
+            self.maxnum = num
 
 class AverageMeter(object):
     """

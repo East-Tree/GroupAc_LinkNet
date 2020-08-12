@@ -156,7 +156,7 @@ class Config2(object):
         # work path
         self.workPath = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN'
         self.dataPath = self.workPath + '/data'
-        self.resultPath = self.workPath + '/result'
+        self.resultPath = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/result'
         self.outputPath = None
         # self.outputPath = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00'
 
@@ -170,7 +170,7 @@ class Config2(object):
         """
         1: manually split 2: random split with stable seed 3: random split with random seed
         """
-        self.split_mode = 2
+        self.split_mode = 1
         """
         0. read the central frame from the sequence 
         1. read all frames from the sequence
@@ -202,7 +202,8 @@ class Config2(object):
             'iterative_times': 1,
             'routing_times': 3,
             'pooling_method': 'ave',
-            'readout_max_num': 1
+            'readout_max_num': 6,
+            'readout_mode': 'con'
         }
         # training parameter
         """
@@ -214,7 +215,7 @@ class Config2(object):
         5: silly version of linknet, generate intermediate variable -- state
         6: pretrain of mode3
         """
-        self.train_mode = 2
+        self.train_mode = 0
         self.pre_train = 1
         #self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200417-01/model/stage2_epoch38_67.36%.pth'
         self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200327-00/model/stage1_epoch25_75.13%new.pth'
@@ -234,14 +235,15 @@ class Config2(object):
         self.weight_decay = 0.005
         self.break_line = 1e-5
         self.start_epoch = 1
-        self.max_epoch = 200
+        self.max_epoch = 120
         # testing parameter
         self.test_batch_size = 4
         self.test_interval_epoch = 2
 
         # loss function parameter
-        # self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
-        self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
+        #self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
+        #self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
+        self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]
         self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.activities_loss_weight = 1.

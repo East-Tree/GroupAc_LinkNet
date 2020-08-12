@@ -2,6 +2,8 @@ from typing import Dict, Any, Callable, Tuple
 
 import volleyballDataset
 from basemodel import *
+import improvemodel
+import BBonemodel
 import config
 import utils
 import torch.nn.functional as F
@@ -103,6 +105,7 @@ class VolleyballEpoch():
             with torch.no_grad():
                 for batch_data in tqdm(self.data_loader):
                     self.baseprocess(batch_data)
+
             info = {
                 'mode': self.mode,
                 'time': self.epoch_timer.timeit(),
@@ -128,7 +131,10 @@ class VolleyballEpoch():
         actions_in = actions_in.reshape(-1).to(device=self.device)
 
         # forward
-        actions_scores = self.model((batch_data[0], batch_data[3]))  # tensor(B#N, actions_num)
+        if self.model == 'train':
+            actions_scores, actions_in= self.model((batch_data[0], batch_data[3]),mode='train',label=actions_in)  # tensor(B#N, actions_num)
+        else:
+            actions_scores = self.model((batch_data[0], batch_data[3]))
 
         # Predict actions
         actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
@@ -165,6 +171,7 @@ class VolleyballEpoch2():
         self.loss_meter = AverageMeter()
         self.actions_loss_weight = GeneralAverageMeterTensor(cfg.actions_num)
         self.activities_loss_weight = GeneralAverageMeterTensor(cfg.activities_num)
+        self.activity_entropy = GeneralAverageMeterTensor(cfg.activities_num)
         self.label_coef_meter = CoefMatrixMeter(cfg.actions_num)
         self.result_coef_meter = CoefMatrixMeter(cfg.actions_num)
         self.coef_var_meter = AverageMeter()
@@ -199,8 +206,9 @@ class VolleyballEpoch2():
                 'activities_loss_weight': self.activities_loss_weight.correct_rate_each.numpy().tolist(),
                 'activities_each_num': self.activities_meter.all_num_each,
                 'label_coef_meter': self.label_coef_meter.coef_rate,
-                'result_coef_meter': self.result_coef_meter.coef_rate,
-                'coef_var':self.coef_var_meter.avg
+                'relation_entropy': self.activity_entropy.correct_rate,
+                'rela_entropy_each': self.activity_entropy.correct_rate_each.numpy().tolist()
+
             }
 
         elif self.mode == 'test':
@@ -220,8 +228,8 @@ class VolleyballEpoch2():
                 'activities_each_acc': self.activities_meter.correct_rate_each.numpy().tolist(),
                 'activities_each_num': self.activities_meter.all_num_each,
                 'label_coef_meter': self.label_coef_meter.coef_rate,
-                'result_coef_meter': self.result_coef_meter.coef_rate,
-                'coef_var': self.coef_var_meter.avg
+                'relation_entropy': self.activity_entropy.correct_rate,
+                'rela_entropy_each': self.activity_entropy.correct_rate_each.numpy().tolist()
             }
         else:
             assert False, "mode name incorrect"
@@ -270,7 +278,9 @@ class VolleyballEpoch2():
         self.activities_meter.update(activities_result, activities_in)
         self.actions_loss_weight.update(action_loss_w.squeeze(1), actions_in)
         self.activities_loss_weight.update(activi_loss_w.squeeze(1), activities_in)
-
+        coef1 = torch.cat(coef0, dim=0)
+        coef_entropy  = rela_entropy(coef1)
+        self.activity_entropy.update(coef_entropy, activities_in)
         #  get the coefficient matrix log
         self.label_coef_meter.update(coef0, actions_in)
         self.result_coef_meter.update(coef0, actions_result)
@@ -735,7 +745,7 @@ if __name__ == '__main__':
         train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.new_collate, **params)
         test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.new_collate, **params)
         #    build model
-        model = SelfNet2(cfg.imageSize, cfg.crop_size, cfg.actions_num, device, **cfg.model_para)  # type: SelfNet2
+        model = BBonemodel.SelfNet2(cfg.imageSize, cfg.crop_size, cfg.actions_num, device, **cfg.model_para)  # type: SelfNet2
         model.to(device=device)
         model.train()
         #    optimizer implement
@@ -754,6 +764,7 @@ if __name__ == '__main__':
         #    begin training
         start_epoch = cfg.start_epoch
         all_info = []
+        best_result = MaxItem()
         for epoch in range(start_epoch, start_epoch + cfg.max_epoch):
             if epoch in cfg.lr_plan:
                 adjust_lr(optimizer, cfg.lr_plan[epoch], log)
@@ -779,9 +790,12 @@ if __name__ == '__main__':
                 TBWriter.add_scalars('test1_acc_each', dict(zip(ACTIONS, test_result_info['actions_each_acc'])),
                                      epoch)
                 filepath = cfg.outputPath + '/model/stage%d_epoch%d_%.2f%%.pth' % (
-                    1, epoch, test_result_info['activities_acc'])
+                    1, epoch, test_result_info['actions_acc'])
                 model.savemodel(filepath)
                 para_path = filepath
+                # log the best result
+                best_result.update(test_result_info['actions_acc'], test_result_info['epoch'])
+                log.fPrint('best result: %.4f in epoch %d' % (best_result.maxitem,best_result.maxnum))
 
             if epoch > 10 + start_epoch:
                 if abs(all_info[epoch - start_epoch]['loss'] - all_info[epoch - start_epoch - 1][
@@ -795,7 +809,7 @@ if __name__ == '__main__':
         train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.new_collate, **params)
         test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.new_collate, **params)
         #    build model
-        model = LinkNet1(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device,
+        model = improvemodel.LinkNet1(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.activities_num, device=device,
                          **cfg.model_para)  # type: LinkNet1
         model.to(device=device)
         model.train()

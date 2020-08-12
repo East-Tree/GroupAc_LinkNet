@@ -171,8 +171,7 @@ class SelfNet2(nn.Module):
         # action sequence
         self.read_actions = nn.Sequential(
             nn.Linear(self.arch_para['person_fea_dim'], self.actions_num),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(self.actions_num)
+            nn.LeakyReLU()
         )
 
         for m in self.modules():  # network initial for linear layer
@@ -250,9 +249,10 @@ class SelfNet0(nn.Module):
         self.mod_embed = nn.Sequential(
             nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,
                       self.arch_para['person_fea_dim']),
-            nn.LeakyReLU()
+            nn.LeakyReLU(),
+            nn.LayerNorm(self.arch_para['person_fea_dim'])
         )
-        self.mod_dropout = nn.Dropout(p=self.arch_para['dropout_prob'])
+
 
         for m in self.modules():  # network initial for linear layer
             if isinstance(m, nn.Linear):
@@ -345,7 +345,6 @@ class SelfNet0(nn.Module):
         # Embedding to feature
         self_features = self.mod_embed(boxes_features)  # (B*N, NFB)
 
-        self_features = self.mod_dropout(self_features)
 
         return self_features
 

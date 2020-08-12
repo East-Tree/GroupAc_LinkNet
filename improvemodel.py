@@ -375,6 +375,7 @@ class SelfNet01(nn.Module):
         self.mod_embed = nn.Sequential(
             nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,
                       self.arch_para['person_fea_dim']),
+            nn.LeakyReLU(),
             nn.LayerNorm(self.arch_para['person_fea_dim'])
         )
 
@@ -596,6 +597,8 @@ class LinkNet0(nn.Module):
 
 
 # linknet1, this model combine basic GCN process and two modified module
+# in this model, we designed different functions for different group-activity readout methods,
+# sum, concatenate, rnn
 class LinkNet1(nn.Module):
     """
     the link net using other individual's feature
@@ -610,6 +613,7 @@ class LinkNet1(nn.Module):
         self.activities_num = cfg_activities_num
         self.device = device
         self.readout_max_n = self.arch_para['readout_max_num']
+        self.readout_mode = self.arch_para['readout_mode']
 
         # network layers
         #   self awareness
@@ -622,11 +626,24 @@ class LinkNet1(nn.Module):
             nn.BatchNorm1d(self.actions_num)
         )
         #   activity sequence
-        self.read_activities = nn.Sequential(
-            nn.Linear(self.arch_para['relation_fea_dim']*self.readout_max_n, self.activities_num),
-            nn.Sigmoid(),
-            nn.BatchNorm1d(self.activities_num)
-        )
+        if self.readout_mode == 'sum':
+            self.read_activities = nn.Sequential(
+                nn.Linear(self.arch_para['relation_fea_dim'], self.activities_num),
+                nn.Sigmoid(),
+                nn.BatchNorm1d(self.activities_num)
+            )
+        elif self.readout_mode == 'rnn':
+            self.read_activities = nn.Sequential(
+                Rnn_S(self.arch_para['relation_fea_dim'], self.activities_num),
+                nn.BatchNorm1d(self.activities_num)
+            )
+        else:
+            """default mode : concatenate"""
+            self.read_activities = nn.Sequential(
+                nn.Linear(self.arch_para['relation_fea_dim']*self.readout_max_n, self.activities_num),
+                nn.Sigmoid(),
+                nn.BatchNorm1d(self.activities_num)
+            )
         #  posi-bias convolution model group
         self.linklayer = []
         self.linklayer.append(PosiBiasNet2(self.arch_para['person_fea_dim'], self.arch_para['relation_fea_dim'],
@@ -652,7 +669,8 @@ class LinkNet1(nn.Module):
             'biasNet_channel_pos': 8,
             'iterative_times': 3,
             'pooling_method': 'ave',
-            'routing_times': 3
+            'routing_times': 3,
+            'readout_mode': 'con'
         }
         for i in arch_para:
             if i not in para:
@@ -718,7 +736,11 @@ class LinkNet1(nn.Module):
             # coef0, _ = torch.max(coef0, dim=0)  # (source, 1)
             # concatenate final person feature and group feature
             person_fea = torch.cat((person_fea0[datum:datum + person_num[i]], vec0), dim=1)
-            group_fea = group_max(vec0, coef1, self.readout_max_n).reshape(1,-1)
+            if self.readout_mode == 'sum':
+                group_fea = group_max(vec0, coef1, self.readout_max_n).reshape(self.readout_max_n,-1)
+                group_fea = (torch.sum(group_fea,0)).reshape(1, -1)
+            else:
+                group_fea = group_max(vec0, coef1, self.readout_max_n).reshape(1, -1)
             datum = datum + person_num[i]
             # scores result output
             action_scores.append(person_fea)  # (batch#num, actions_num)
@@ -980,7 +1002,7 @@ class PosiBiasNet2(nn.Module):
             [[math.cos(baseAngel * i), math.sin(baseAngel * i)] for i in range(self.inter_num)]).to(device=device)
         self.index_vector = torch.transpose(self.index_vector, 0, 1)  # [2, inter_num]
         self.index_vector.requires_grad_(False)
-        # network layer
+        # network layer, then normalized by l2-norm
         self.layer1 = nn.Sequential(
             nn.Linear(self.input_dim, self.output_dim * self.inter_num * self.inter_dis_num),
             nn.Tanh()
@@ -1047,6 +1069,9 @@ class PosiBiasNet2(nn.Module):
                                  device=self.device)
         intern1 = intern1.reshape(-1, self.output_dim).index_copy(0, dia_index, intern2)
         intern1 = intern1.reshape(object_num, object_num, -1)
+
+        # normalize each feature by 2 norm
+        intern1 = F.normalize(intern1,p=2,dim=-1)
 
         return intern1
 
@@ -1384,3 +1409,15 @@ class GCN_link(nn.Module):
         kl_loss_all1 = kl_loss_all / a
 
         return action_scores, activities_scores, coef0
+
+class Rnn_S(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.rnn=nn.RNN(input_size=input_size, hidden_size=hidden_size, batch_first=True,
+               nonlinearity='relu')
+    def forward(self, input):
+        output, _ = self.rnn(input) #(batch,seq,dim)
+        output = torch.squeeze(output[:,-1:,:]) #(batch,dim)
+
+        return output

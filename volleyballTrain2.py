@@ -278,8 +278,7 @@ class VolleyballEpoch2():
         self.activities_meter.update(activities_result, activities_in)
         self.actions_loss_weight.update(action_loss_w.squeeze(1), actions_in)
         self.activities_loss_weight.update(activi_loss_w.squeeze(1), activities_in)
-        coef1 = torch.cat(coef0, dim=0)
-        coef_entropy  = rela_entropy(coef1)
+        coef_entropy = rela_entropy(coef0)
         self.activity_entropy.update(coef_entropy, activities_in)
         #  get the coefficient matrix log
         self.label_coef_meter.update(coef0, actions_in)

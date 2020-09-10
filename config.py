@@ -216,7 +216,7 @@ class Config2(object):
         6: pretrain of mode3
         """
         self.train_mode = 0
-        self.pre_train = 1
+        self.pre_train = 0
         #self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200417-01/model/stage2_epoch38_67.36%.pth'
         self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200327-00/model/stage1_epoch25_75.13%new.pth'
         #self.para_load_path = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200412-00/model/stage1_epoch24_71.11%.pth'
@@ -230,7 +230,7 @@ class Config2(object):
         # training
         self.use_gpu = True
         self.renew_weight = False
-        self.batch_size = 8
+        self.batch_size = 4
         self.train_learning_rate = 5e-5
         self.weight_decay = 0.005
         self.break_line = 1e-5
@@ -242,8 +242,8 @@ class Config2(object):
 
         # loss function parameter
         #self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
-        #self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
-        self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]
+        self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
+        #self.actions_weights = [1., 1., 1., 1., 1., 1., 1., 1., 1.]
         self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.activities_loss_weight = 1.

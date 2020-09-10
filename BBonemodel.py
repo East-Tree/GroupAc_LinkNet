@@ -110,7 +110,7 @@ class SelfNet0(nn.Module):
         self.arch_para = self.para_align(arch_feature)
 
         # here determine the backbone net
-        self.backbone_net = MyInception_v3(transform_input=False, pretrained=False)  # type: MyInception_v3
+        self.backbone_net = MyInception_v3(transform_input=False, pretrained= True)  # type: MyInception_v3
         self.backbone_dim = MyInception_v3.outputDim()
         self.backbone_size = MyInception_v3.outputSize(*self.imagesize)
 

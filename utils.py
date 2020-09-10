@@ -126,14 +126,19 @@ def routing_link3(input0, vec0, weight0=None, times=3):
 
 def rela_entropy(input0):
     """
-    :param input0: (batch, weight)
+    :param input0: [(batch, weight),...]
     :return:
     """
-    weight = F.normalize(input0,p=1,dim=-1)
-    num = input0.size()[-1]
-    max_entropy = torch.tensor([-(math.log(1/num))])
-    real_entropy = torch.sum(-(weight * ((weight+1e-9).log())),dim=-1)
-    return real_entropy / max_entropy
+    result = []
+    for _ in input0:
+        weight = F.normalize(_,p=1,dim=-1)
+        num = _.size()[-1]
+        max_entropy = torch.tensor([-(math.log(1/num))]).to(device=_.device)
+        real_entropy = torch.sum(-(weight * ((weight+1e-9).log())),dim=-1)
+        real_entropy = torch.mean(real_entropy,dim=0,keepdim=True)
+        result.append( real_entropy / max_entropy)
+    result = torch.cat(result)
+    return result
 
 def group_max(input0, coef0, max_n=3):
     """

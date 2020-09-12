@@ -168,9 +168,9 @@ class Config2(object):
         self.activities_num = 0
         self.dataset_splitrate = 0.8
         """
-        1: manually split 2: random split with stable seed 3: random split with random seed
+        1: manually split 2: random split with stable seed 3: random split with random seed 4： for train set read all frames, for test set read central frame
         """
-        self.split_mode = 1
+        self.split_mode = 4
         """
         0. read the central frame from the sequence 
         1. read all frames from the sequence

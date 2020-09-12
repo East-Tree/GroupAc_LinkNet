@@ -729,6 +729,11 @@ if __name__ == '__main__':
         test_indices = indices[split:]
         trainDataset = data.Subset(full_dataset, train_indices)
         testDataset = data.Subset(full_dataset, test_indices)
+    elif cfg.split_mode == 4:
+        trainDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.train_seqs,
+                                                            mode=1)
+        testDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.test_seqs,
+                                                           mode=0)
     else:  # split_mode = 1
         trainDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.train_seqs,
                                                             mode=cfg.dataset_mode)

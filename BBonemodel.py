@@ -118,7 +118,8 @@ class SelfNet0(nn.Module):
         self.mod_embed = nn.Sequential(
             nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,
                       self.arch_para['person_fea_dim']),
-            nn.LayerNorm(self.arch_para['person_fea_dim'])
+            nn.LayerNorm(self.arch_para['person_fea_dim']),
+            nn.Dropout(0.3)
         )
 
 
@@ -223,7 +224,7 @@ def category_balance(input0, label0, batch0=None):
     :param label0: rensor(batch)
     :return: tensor(batch,fea)
     """
-    cate_num = 8
+    cate_num = 9
     assert input0.size()[0] == label0.size()[0], 'input tensor should be same with index tensor in 0 dim'
     if batch0 == None:
         batch = input0.size()[0]

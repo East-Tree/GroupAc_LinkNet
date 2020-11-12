@@ -170,7 +170,7 @@ class Config2(object):
         """
         1: manually split 2: random split with stable seed 3: random split with random seed 4： for train set read all frames, for test set read central frame
         """
-        self.split_mode = 4
+        self.split_mode = 1
         """
         0. read the central frame from the sequence 
         1. read all frames from the sequence
@@ -337,7 +337,7 @@ class Config2(object):
         }
         lr_plan4 = {
             1: {
-                0: 2e-5
+                0: 2e-6
             }
         }
         lr_plan5 = {

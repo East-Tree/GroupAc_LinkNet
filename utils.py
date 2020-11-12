@@ -463,7 +463,7 @@ class CoefMatrixMeter(object):
             self.activity_num = self.actions_num
         else:
             self.activity_num = activity_num
-        self.coef_value = torch.zeros([self.activity_num, self.actions_num],
+        self.coe_f_value = torch.zeros([self.activity_num, self.actions_num],
                                       dtype=torch.float)
         self.coef_num = self.coef_value + 1e-10
         self.coef_rate = self.coef_value / self.coef_num

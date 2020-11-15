@@ -131,7 +131,7 @@ class VolleyballEpoch():
         actions_in = actions_in.reshape(-1).to(device=self.device)
 
         # forward
-        if self.model == 'train':
+        if self.mode == 'train':
             actions_scores, actions_in= self.model((batch_data[0], batch_data[3]),mode='train',label=actions_in)  # tensor(B#N, actions_num)
         else:
             actions_scores = self.model((batch_data[0], batch_data[3]))

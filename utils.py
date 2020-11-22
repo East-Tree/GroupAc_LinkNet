@@ -376,6 +376,7 @@ class AverageMeterTensor(object):
         self.correct_num = 0
         self.all_num = 0
         self.correct_rate = 0
+        self.ave_rate = 0
 
     def reset(self, actions_num=None):
         if actions_num is None:
@@ -388,6 +389,7 @@ class AverageMeterTensor(object):
         self.correct_num = 0
         self.all_num = 0
         self.correct_rate = 0
+        self.ave_rate = 0
 
     def update(self, result_tensor0, label_tensor0):
         """
@@ -407,6 +409,7 @@ class AverageMeterTensor(object):
         self.correct_num = int(torch.sum(self.correct_num_each))
         self.all_num = int(torch.sum(self.all_num_each))
         self.correct_rate = (self.correct_num / self.all_num) * 100
+        self.ave_rate = float(torch.mean(self.correct_rate_each))
 
 class GeneralAverageMeterTensor(object):
     """

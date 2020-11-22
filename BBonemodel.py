@@ -118,6 +118,7 @@ class SelfNet0(nn.Module):
         self.mod_embed = nn.Sequential(
             nn.Linear(self.RoI_crop_size[0] * self.RoI_crop_size[0] * self.backbone_dim,
                       self.arch_para['person_fea_dim']),
+            nn.LeakyReLU(),
             nn.LayerNorm(self.arch_para['person_fea_dim']),
             nn.Dropout(0.3)
         )

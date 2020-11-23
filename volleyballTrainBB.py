@@ -22,7 +22,7 @@ class Config(object):
 
     def __init__(self):
         # work path
-        self.workPath = '/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN'
+        self.workPath = '/kmj-labmen-007/Data1/Project/Code/HyperReco'
         self.dataPath = self.workPath + '/data'
         self.resultPath = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/result'
         self.outputPath = None

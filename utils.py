@@ -308,6 +308,13 @@ def adjust_lr(optimizer, lr_plan, logger):
                 for each_para in optimizer.param_groups[param_group-1]["params"]:
                     each_para.requires_grad = True
 
+def adjust_loss(cfg, loss_plan, logger):
+    logger.fPrint('change loss weight:' + str(loss_plan))
+    
+    cfg.actions_loss_weight = loss_plan[1]
+    cfg.activities_loss_weight = loss_plan[2]
+    cfg.center_loss_weight = loss_plan[3]
+   
 
 def label_gather(cate_size, obj_tensor, res_tensor):
     ob = torch.zeros(cate_size)

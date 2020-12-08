@@ -71,10 +71,11 @@ class SelfNet2(nn.Module):
         self.read_actions.load_state_dict(state['read_actions_dict'])
         print('Load model states from: ', filepath)
 
-    def forward(self, batch_data, mode=None, return_fea=False,label=None):
+    def forward(self, batch_data, mode=None, return_fea=False,cata_balance=False,label=None):
         # image_in is a list containing image batch data(tensor(c,h,w))
         # boxes_in is a list containing bbox batch data(tensor(num,4))
         self_features = self.baselayer(batch_data)  # (B*N, NFB)
+        feature_label = label
 
         """
         # self states
@@ -83,8 +84,8 @@ class SelfNet2(nn.Module):
 
         # Predict actions
         # boxes_states_flat = boxes_features.reshape(-1, NFB)  # B*N, NFB
-        if mode == 'train':
-            self_features, feature_label = category_balance(self_features,label)
+        if mode == 'train' and cata_balance:
+            self_features, feature_label = category_balance(self_features,feature_label)
         actions_scores = self.read_actions(self_features)  # B*N, actions_num
 
         if mode == 'train':

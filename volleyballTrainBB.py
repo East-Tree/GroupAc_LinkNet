@@ -97,6 +97,7 @@ class Config(object):
         stage1 is a pre-train for self action feature output and readout 
         """
         # training
+        self.cata_balance = False
         self.use_gpu = True
         self.renew_weight = False
         self.batch_size = 8
@@ -110,13 +111,13 @@ class Config(object):
         self.test_interval_epoch = 2
 
         # loss function parameter
-        #self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
+        self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
         #self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
-        self.actions_weights = [1., 1., 1., 3., 1., 1., 1., 1., 1.]
+        #self.actions_weights = [1., 1., 1., 3., 1., 1., 1., 1., 1.]
         self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.activities_loss_weight = 1.
-        self.center_loss_weight = 0.01
+        self.center_loss_weight = 1 
         self.focal_loss_use = True
         self.kl_loss_weight = 0
         self.other_actions_loss_weight = 0.2
@@ -152,19 +153,21 @@ class Config(object):
         print("The output result will be saved in %s" % self.outputPath)
 
     def loss_apply(self):
-        self.loss_plan = {
+       loss_plan1 = {
             1: {
-                1: 2.0, 2: 2.0
+                1: 0, 2: 2.0, 3:0.1
             },
-            2: {
-                1: 1.0, 2: 1.0
+            21: {
+                1: 1.0, 2: 1.0,3: 0.1
             }
-        }
-        if self.train_mode in self.loss_plan:
-            mode = self.train_mode
-            self.actions_loss_weight = self.loss_plan[mode][1]
-            self.activities_loss_weight = self.loss_plan[mode][2]
-
+       }
+       loss_plan2 = {
+            1: {
+                1: 1, 2: 2.0, 3:0.01
+            }
+       }
+       self.loss_plan = loss_plan1
+        
     def lr_apply(self):
         lr_plan1 = {
             1: {
@@ -173,13 +176,13 @@ class Config(object):
         }
         lr_plan2 = {
             1: {
-                1: 0, 2: 2e-5, 3: 2e-5
+                1: 0, 2: 1e-4, 3: 0
             },
-            40: {
-                1: 0, 2: 2e-6, 3: 2e-6
+            21: {
+                1: 0, 2: 2e-5, 3: 1e-5
             },
-            200: {
-                1: 0, 2: 1e-4, 3: 1e-4
+            41: {
+                1: 0, 2: 2e-6, 3: 2e-5
             },
             250: {
                 1: 0, 2: 5e-5, 3: 5e-5
@@ -295,9 +298,9 @@ class VolleyballEpoch():
         # forward
         if self.mode == 'train':
             if self.cfg.center_loss_weight > 0:
-                actions_scores, actions_fea, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,label=actions_in)
+                actions_scores, actions_fea, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in)
             else:
-                actions_scores, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',label=actions_in)  # tensor(B#N, actions_num)
+                actions_scores, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in)  # tensor(B#N, actions_num)
         else:
             actions_scores = self.model((batch_data[0], batch_data[3]))
 
@@ -420,6 +423,8 @@ if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + cfg.max_epoch):
         if epoch in cfg.lr_plan:
             adjust_lr(optimizer, cfg.lr_plan[epoch], log)
+        if epoch in cfg.loss_plan:
+            adjust_loss(cfg, cfg.loss_plan[epoch], log)
 
         #  each epoch in the iteration
         model.train()

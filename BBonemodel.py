@@ -224,6 +224,7 @@ class SelfNet0(nn.Module):
 
 # randomly organize the output individual feature
 def category_balance(input0, label0, batch0=None):
+
     """
     :param input0: tensor(batch,fea)
     :param label0: rensor(batch)
@@ -260,3 +261,97 @@ def category_balance(input0, label0, batch0=None):
     outputLabel = torch.index_select(label0, 0, torch.tensor(index).to(device=input0.device))
 
     return outputTensor, outputLabel
+
+
+# the sequential mode of selfnet, add a LSTM layer , the input should be (B*(realB*frame num),C,W,H)
+class SelfNetS(nn.Module):
+    """
+    main module of base model for the volleyball
+    """
+
+    def __init__(self, cfg_imagesize, cfg_roisize, cfg_actions_num, device=None, **arch_feature):
+
+        super().__init__()
+        self.imagesize = cfg_imagesize
+        self.RoI_crop_size = cfg_roisize
+        self.actions_num = cfg_actions_num
+        self.device = device
+
+        # define architecture parameter
+        self.arch_para = self.para_align(arch_feature)
+
+        # here determine the backbone net and embedding layer
+        self.baselayer = SelfNet0(self.imagesize, self.RoI_crop_size, device=self.device, **self.arch_para)
+        
+        
+        # LSTM model to analyze the personal feature
+        self.fea_lstm = nn.LSTM(self.arch_para['person_fea_dim'],self.arch_para['person_fea_dim'])
+
+        # action sequence
+        self.read_actions = nn.Sequential(
+            nn.Linear(self.arch_para['person_fea_dim'], self.actions_num),
+            nn.LeakyReLU()
+        )
+
+        for m in self.modules():  # network initial for linear layer
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+                nn.init.zeros_(m.bias)
+
+    def para_align(self, para):
+        arch_para = {
+            'person_fea_dim': 2048,
+            'state_fea_dim': 512,
+            'dropout_prob': 0.3
+        }
+        for i in arch_para:
+            if i in para:
+                arch_para[i] = para[i]
+        return arch_para
+
+    def savemodel(self, filepath):
+        state = {
+            'base_state_dict': self.baselayer.backbone_net.state_dict(),
+            'mod_embed_state_dict': self.baselayer.mod_embed.state_dict(),
+            'fea_lstm_state_dict':self.fea_lstm.state_dict(),
+            'read_actions_dict': self.read_actions.state_dict()
+        }
+
+        torch.save(state, filepath)
+        print('model saved to:', filepath)
+
+    def loadmodel(self, filepath):
+        state = torch.load(filepath)
+        self.baselayer.load_state_dict(state['base_state_dict'])
+        self.read_actions.load_state_dict(state['read_actions_dict'])
+        print('Load model states from: ', filepath)
+
+    def forward(self, batch_data, mode=None, return_fea=False,cata_balance=False,label=None, seq_len=1):
+        # image_in is a list containing image batch data()tensor(c,h,w)
+        # boxes_in is a list containing bbox batch data()tensor(num,4)
+        # in order to apply the lstm after feature embeding, the fitted data is orgnized as [f00,f10,f01,f11,f02,f12]
+        
+        self_features = self.baselayer(batch_data)  # ([f00,f10,f01,f11,f02,f12]**N, NFB)
+        feature_label = label
+
+        # LSTM layer, the input should be resize as (seq_len, batch, input_size)
+        # [[f00N,f10N],
+        #  [f01N,f11N],
+        #  [f02N,f12N]]
+        if seq_len>1:
+            self_features = self_features.reshape(seq_len,-1,self_features.size()[-1])
+            self_features,_ = self.fea_lstm(self_features) #(batch, input_size)
+        
+        # Predict actions
+        # boxes_states_flat = boxes_features.reshape(-1, NFB)  # B*N, NFB
+        if mode == 'train' and cata_balance:
+            self_features, feature_label = category_balance(self_features,feature_label)
+        actions_scores = self.read_actions(self_features)  # B*N, actions_num
+
+        if mode == 'train':
+            if return_fea:
+                return actions_scores, self_features, feature_label
+            else:
+                return actions_scores, feature_label
+        else:
+            return actions_scores

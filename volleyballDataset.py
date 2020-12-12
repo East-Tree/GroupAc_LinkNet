@@ -21,6 +21,23 @@ def new_collate(batch):
     # image:[sample1, sample2, ...]
     return [image, activities, actions, bbox]
 
+def seq_collate(batch):
+
+    activities = [item[1] for item in batch]
+    actions = [item[2] for item in batch]
+
+    batch_size = len(item[0])
+    seq_len = len(item[0][0])
+
+    image =[]
+    bbox =[]
+    for j in range(seq_len):
+        for i in range(batch_size):
+            image.append(item[0][i][j])
+            bbox.append(item[3][i][j])
+            
+    return [image, activities, actions, bbox]        
+
 def randTimes(pro:float):
     proInst = int(pro)
     proFrac = pro - proInst
@@ -169,7 +186,7 @@ class VolleyballDataset(data.Dataset):
         return self.NUM_ACTIONS, self.NUM_ACTIVITIES
 
 class VolleyballDatasetS(data.Dataset):
-    def __init__(self, cfg_dataPath, cfg_imagesize=(720, 1280), frameList=None, mode=0, dataagument=None):
+    def __init__(self, cfg_dataPath, cfg_imagesize=(720, 1280), frameList=None, mode=0, dataagument=None, seq_num=1):
         self.datasetPath = cfg_dataPath + '/volleyball'
         if frameList is None:
             self.frameList = list(range(55))  # generate reading list for volleyball dataset
@@ -186,18 +203,20 @@ class VolleyballDatasetS(data.Dataset):
         self.preframe = 4
         self.postframe = 4
         self.seqlength = self.preframe+self.postframe+1
+        self.seq_num = seq_num
 
         # data sampling mode
         """
         0. read the central frame from the sequence 
         1. read all frames from the sequence
         2. randomly read a frame from the sequence
+        3. read the image in sequence format
         """
         self.mode = mode
 
     def __len__(self):
 
-        if self.mode==0 or self.mode==2:
+        if self.mode==0 or self.mode==2 or self.mode==3:
             return len(self.allFrames)
         else:
             return len(self.allFrames)*self.seqlength
@@ -216,6 +235,9 @@ class VolleyballDatasetS(data.Dataset):
             frameItem = self.allFrames[index]
             fidIn = random.randint(0, self.seqlength-1)
             return self.readSpecificFrameS(frameItem, fidIn)
+        elif self.mode == 3:
+            frameItem = self.allFrames[index]
+            return self.readSpecificSeq(frameItem)
         else:
             assert False
 
@@ -368,6 +390,53 @@ class VolleyballDatasetS(data.Dataset):
         bbox = torch.from_numpy(bbox)
 
         return img, activity, action, bbox
+
+    def readSpecificSeq(self, frameIndex: tuple):
+
+        # calculate the fid number
+        if self.seq_num % 2 == 0: # even
+            inter = self.seqlength // (self.seq_num+1)
+            fidIn = [i for i in range(1,self.seqlength_1) if i % inter==0]
+        else: # odd
+            inter =  self.seqlength // (self.seq_num-1)
+            fidIn = [i for i in range(self.seqlength) if i % inter==0]
+        
+        imgList = []
+        bboxList = []
+        for id in fidIn:
+            sid, fid0 = frameIndex
+            fid = fid0 - self.preframe + id
+            framePath = self.datasetPath + '/%d/%d/%d.jpg' % (sid, fid0, fid)
+            img = Image.open(framePath)
+            img = Tfunc.resize(img, self.imagesize)
+            img = np.array(img)
+
+            # H, W, 3 -> 3, H, W
+            img = img.transpose((2, 0, 1))
+            imgList.append(img)
+
+            # read bbox coordinate from track file
+            bbox = self.trackData[(sid, fid0)][fid]  # np(y1,x1,y2,x2)
+            bbox = bbox[:, (1,0,3,2)]
+
+            bboxList.append(bbox)
+
+        # transform all annotation data into numpy
+        activity = np.array(self.annotationData[sid][fid0]['group_activity'])
+        action = np.array(self.annotationData[sid][fid0]['action'])
+
+        
+
+        # transform all data into torch
+        
+        imgList = [torch.from_numpy(img) for img in imgList]
+        bboxList = [torch.from_numpy(bbox) for bbox in bboxList]
+        activity = torch.from_numpy(activity)
+        action = torch.from_numpy(action)
+        
+
+        return imgList, activity, action, bboxList
+
 
     def classCount(self):
 

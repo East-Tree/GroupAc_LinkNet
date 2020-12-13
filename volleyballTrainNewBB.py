@@ -156,10 +156,10 @@ class Config(object):
     def loss_apply(self):
        loss_plan1 = {
             1: {
-                1: 0, 2: 2.0, 3:0.1
+                1: 0, 2: 2.0, 3: 0.1
             },
             21: {
-                1: 1.0, 2: 1.0,3: 0.1
+                1: 1.0, 2: 1.0, 3: 0.1
             }
        }
        loss_plan2 = {
@@ -190,6 +190,11 @@ class Config(object):
             },
             300: {
                 1: 0, 2: 2e-5, 3: 2e-5
+            }
+        }
+        lr_plan3 = {
+            1: {
+                1: 0, 2: 1e-4, 3: 1e-4, 4: 1e-4
             }
         }
         self.lr_plan = lr_plan2
@@ -334,8 +339,7 @@ class VolleyballEpoch():
 
 
 if __name__ == '__main__':
-    introduce = "base self model renew weight 1e-4"
-    print(introduce)
+    introduce = "the new base model(LSTM include) train"
     cfg = Config()
     np.set_printoptions(precision=3)
     para_path = None
@@ -357,7 +361,7 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     # generate the volleyball dataset object
-    full_dataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, mode=cfg.dataset_mode)
+    full_dataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, mode=cfg.dataset_mode, seq_num=3)
     # get the object information(object categories count)
     cfg.actions_num, cfg.activities_num = full_dataset.classCount()
 
@@ -404,7 +408,7 @@ if __name__ == '__main__':
         [
             {"params": model.baselayer.backbone_net.parameters()},
             {"params": model.baselayer.mod_embed.parameters()},
-            {"params": model.fea_lstm.parameters()}
+            {"params": model.fea_lstm.parameters()},
             {"params": model.read_actions.parameters()}
         ],
         lr=cfg.train_learning_rate,
@@ -432,7 +436,7 @@ if __name__ == '__main__':
         model.train()
         # check use center loss or not
         if cfg.center_loss_weight > 0:
-            train_result_info = VolleyballEpoch('train', train_loader, model, device, cfg=cfg, optimizer=optimizer,lossmodel=center_loss,optimizer2=lossOpti ,epoch=epoch).main()
+            train_result_info = VolleyballEpoch('train', train_loader, model, device, cfg=cfg, optimizer=optimizer,lossmodel=center_loss,optimizer2=lossOpti, epoch=epoch).main()
         else:
             train_result_info = VolleyballEpoch('train', train_loader, model, device, cfg=cfg, optimizer=optimizer, epoch=epoch).main()
         for each_info in train_result_info:

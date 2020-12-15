@@ -48,6 +48,8 @@ class Config(object):
         """
         self.dataset_mode = 3
 
+        self.seq_len=3
+
         #self.train_seqs = [1,2,3]
         #self.test_seqs = [4,5]
         self.train_seqs = [1, 3, 6, 7, 10, 13, 15, 16, 18, 22, 23, 31, 32, 36, 38, 39, 40, 41, 42, 48, 50, 52, 53, 54, 0, 2, 8, 12, 17, 19, 24, 26, 27, 28, 30, 33, 46, 49, 51]# video id list of train set
@@ -73,7 +75,8 @@ class Config(object):
             'routing_times': 3,
             'pooling_method': 'ave',
             'readout_max_num': 6,
-            'readout_mode': 'con'
+            'readout_mode': 'con',
+            
         }
         # training parameter
         """
@@ -101,7 +104,7 @@ class Config(object):
         self.cata_balance = False
         self.use_gpu = True
         self.renew_weight = False
-        self.batch_size = 8
+        self.batch_size = 2
         self.train_learning_rate = 5e-5
         self.weight_decay = 1e-4
         self.break_line = 1e-5
@@ -167,7 +170,7 @@ class Config(object):
                 1: 1, 2: 2.0, 3:0.01
             }
        }
-       self.loss_plan = loss_plan1
+       self.loss_plan = loss_plan2
         
     def lr_apply(self):
         lr_plan1 = {
@@ -194,10 +197,10 @@ class Config(object):
         }
         lr_plan3 = {
             1: {
-                1: 0, 2: 1e-4, 3: 1e-4, 4: 1e-4
+                1: 0, 2: 1e-5, 3: 1e-5, 4: 1e-5
             }
         }
-        self.lr_plan = lr_plan2
+        self.lr_plan = lr_plan3
         
 
 '''
@@ -304,11 +307,11 @@ class VolleyballEpoch():
         # forward
         if self.mode == 'train':
             if self.cfg.center_loss_weight > 0:
-                actions_scores, actions_fea, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in)
+                actions_scores, actions_fea, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)
             else:
-                actions_scores, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in)  # tensor(B#N, actions_num)
+                actions_scores, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)  # tensor(B#N, actions_num)
         else:
-            actions_scores = self.model((batch_data[0], batch_data[3]))
+            actions_scores = self.model((batch_data[0], batch_data[3]),seq_len=cfg.seq_len)
 
         # Predict actions
         actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
@@ -361,7 +364,7 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     # generate the volleyball dataset object
-    full_dataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, mode=cfg.dataset_mode, seq_num=3)
+    full_dataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, mode=cfg.dataset_mode, seq_num=cfg.seq_len)
     # get the object information(object categories count)
     cfg.actions_num, cfg.activities_num = full_dataset.classCount()
 
@@ -388,9 +391,9 @@ if __name__ == '__main__':
                                                            mode=0)
     else:  # split_mode = 1
         trainDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.train_seqs,
-                                                            mode=cfg.dataset_mode,seq_num=3)
+                                                            mode=cfg.dataset_mode,seq_num=cfg.seq_len)
         testDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.test_seqs,
-                                                           mode=cfg.dataset_mode,seq_num=3)
+                                                           mode=cfg.dataset_mode,seq_num=cfg.seq_len)
     # begin model train in
     #   dataloader implement
     params = {

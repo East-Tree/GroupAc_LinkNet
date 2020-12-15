@@ -26,16 +26,16 @@ def seq_collate(batch):
     activities = [item[1] for item in batch]
     actions = [item[2] for item in batch]
 
-    batch_size = len(item[0])
-    seq_len = len(item[0][0])
+    batch_size = len(batch)
+    seq_len = len(batch[0][0])
 
     image =[]
     bbox =[]
     for j in range(seq_len):
         for i in range(batch_size):
-            image.append(item[0][i][j])
-            bbox.append(item[3][i][j])
-            
+            image.append(batch[i][0][j])
+            bbox.append(batch[i][3][j])
+
     return [image, activities, actions, bbox]        
 
 def randTimes(pro:float):

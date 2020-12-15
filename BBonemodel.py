@@ -340,7 +340,8 @@ class SelfNetS(nn.Module):
         #  [f02N,f12N]]
         if seq_len>1:
             self_features = self_features.reshape(seq_len,-1,self_features.size()[-1])
-            self_features,_ = self.fea_lstm(self_features) #(batch, input_size)
+            self_features,_ = self.fea_lstm(self_features) #(seq_len,node_num, input_size)
+            self_features = self_features[-1,:].squeeze()
         
         # Predict actions
         # boxes_states_flat = boxes_features.reshape(-1, NFB)  # B*N, NFB

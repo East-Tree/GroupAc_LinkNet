@@ -526,6 +526,12 @@ class VolleyballDatasetDraw(data.Dataset):
         assert index in list(range(cls.NUM_ACTIONS)), 'not in action range'
         return cls.id2action[index]
 
+    def set_allFrame(self,allFrame):
+        self.allFrames = allFrame
+    
+    def output_allFrame(self):
+        return self.allFrames
+
     def readAnnotation(self):
         """
         read all annotation according to self.frameList
@@ -606,14 +612,8 @@ class VolleyballDatasetDraw(data.Dataset):
         activity = np.array(self.annotationData[sid][fid]['group_activity'])
         action = np.array(self.annotationData[sid][fid]['action'])
         bbox = np.array(self.annotationData[sid][fid]['bounding_box'])
-
-        # transform all data into torch
-        img = torch.from_numpy(img)
-        activity = torch.from_numpy(activity)
-        action = torch.from_numpy(action)
-        bbox = torch.from_numpy(bbox)
-
-        return img, activity, action, bbox
+        
+        return framePath, activity, action, bbox, sid, fid
 
     def readSpecificFrameS(self, frameIndex: tuple, fidIn):
 

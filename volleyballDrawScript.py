@@ -4,12 +4,13 @@ import volleyballDataset
 from utils import *
 import cv2 as cv2
 from tqdm import *
+import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
 
-    workPath = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN'
+    workPath = '/media/hpc/ssd960/chenduyu'
     dataPath = workPath + '/data'
-    resultPath = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/data/volleyballDraw'
+    resultPath = '/media/hpc/ssd960/chenduyu/data/volleyballDraw'
 
     ACTIONS = ['blocking', 'digging', 'falling', 'jumping',
                'moving', 'setting', 'spiking', 'standing',
@@ -55,6 +56,9 @@ if __name__ == '__main__':
             y1, y2 = (bbox[act0,(1,3)]*720).astype(np.int)
             cv2.putText(img, ACTIONS[act], (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        
+        cv2.imshow('image',img)
+        cv2.waitKey(0)
 
         imgSavePath_seq = fid0Path + '/%d.jpg' %fid
         cv2.imwrite(imgSavePath_seq, img)

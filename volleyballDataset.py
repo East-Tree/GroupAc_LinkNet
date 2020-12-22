@@ -308,8 +308,6 @@ class VolleyballDatasetS(data.Dataset):
                         x1, y1, w, h = map(float, value[i * 5:i * 5 + 4])
                         x2 = x1 + w
                         y2 = y1 + h
-                        x1, x2 = map(lambda x: x / 1280, [x1, x2])
-                        y1, y2 = map(lambda x: x / 720, [y1, y2])
                         bbox.append([x1, y1, x2, y2])
                         action.append([VolleyballDataset.actionToId(value[i * 5 + 4])])
                     fid = int(fileName.split('.')[0])
@@ -344,6 +342,7 @@ class VolleyballDatasetS(data.Dataset):
         sid, fid = frameIndex
         framePath = self.datasetPath + '/%d/%d/%d.jpg' % (sid, fid, fid)
         img = Image.open(framePath)
+        img_size = img.size
         img = Tfunc.resize(img, self.imagesize)
         img = np.array(img)
 
@@ -354,6 +353,10 @@ class VolleyballDatasetS(data.Dataset):
         activity = np.array(self.annotationData[sid][fid]['group_activity'])
         action = np.array(self.annotationData[sid][fid]['action'])
         bbox = np.array(self.annotationData[sid][fid]['bounding_box'])
+
+        # modify the bbox size
+        scale = np.array([[1/img_size[0],1/img_size[1],1/img_size[0],1/img_size[1]]])
+        bbox = bbox * scale
 
         # transform all data into torch
         img = torch.from_numpy(img)
@@ -612,6 +615,10 @@ class VolleyballDatasetDraw(data.Dataset):
         activity = np.array(self.annotationData[sid][fid]['group_activity'])
         action = np.array(self.annotationData[sid][fid]['action'])
         bbox = np.array(self.annotationData[sid][fid]['bounding_box'])
+
+        # read bbox coordinate from track file
+        #bbox = self.trackData[(sid, fid)][fid]  # np(y1,x1,y2,x2)
+        #bbox = bbox[:, (1,0,3,2)] # np(x1,y1,x2,y2)
         
         return framePath, activity, action, bbox, sid, fid
 

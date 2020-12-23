@@ -44,8 +44,11 @@ class Config(object):
         0. read the central frame from the sequence 
         1. read all frames from the sequence
         2. randomly read a frame from the sequence
+        3. read the image in sequence format
         """
-        self.dataset_mode = 0
+        self.dataset_mode = 3
+
+        self.seq_len=3
 
         #self.train_seqs = [1,2,3]
         #self.test_seqs = [4,5]
@@ -67,12 +70,13 @@ class Config(object):
             'dropout_prob': 0.5,
             'feature1_renew_rate': 0.2,
             'biasNet_channel_pos': 8,
-            'biasNet_channel_dis': [0, 0.15 ,0.3 ,0.5],
+            'biasNet_channel_dis': [0, 0.15,0.3,0.5],
             'iterative_times': 1,
             'routing_times': 3,
             'pooling_method': 'ave',
             'readout_max_num': 6,
-            'readout_mode': 'con'
+            'readout_mode': 'con',
+            
         }
         # training parameter
         """
@@ -100,7 +104,7 @@ class Config(object):
         self.cata_balance = False
         self.use_gpu = True
         self.renew_weight = False
-        self.batch_size = 8
+        self.batch_size = 2
         self.train_learning_rate = 5e-5
         self.weight_decay = 1e-4
         self.break_line = 1e-5
@@ -155,10 +159,10 @@ class Config(object):
     def loss_apply(self):
        loss_plan1 = {
             1: {
-                1: 0, 2: 2.0, 3:0.1
+                1: 0, 2: 2.0, 3: 0.1
             },
             21: {
-                1: 1.0, 2: 1.0,3: 0.1
+                1: 1.0, 2: 1.0, 3: 0.1
             }
        }
        loss_plan2 = {
@@ -166,7 +170,7 @@ class Config(object):
                 1: 1, 2: 2.0, 3:0.01
             }
        }
-       self.loss_plan = loss_plan1
+       self.loss_plan = loss_plan2
         
     def lr_apply(self):
         lr_plan1 = {
@@ -191,7 +195,12 @@ class Config(object):
                 1: 0, 2: 2e-5, 3: 2e-5
             }
         }
-        self.lr_plan = lr_plan2
+        lr_plan3 = {
+            1: {
+                1: 0, 2: 1e-5, 3: 1e-5, 4: 1e-5
+            }
+        }
+        self.lr_plan = lr_plan3
         
 
 '''
@@ -200,6 +209,7 @@ new backbone training
 2. add confusion matrix
 3. add average acc of each class 
 4. contains center loss
+5. use LSTM model
 '''
 
 class VolleyballEpoch():
@@ -298,11 +308,11 @@ class VolleyballEpoch():
         # forward
         if self.mode == 'train':
             if self.cfg.center_loss_weight > 0:
-                actions_scores, actions_fea, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in)
+                actions_scores, actions_fea, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)
             else:
-                actions_scores, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in)  # tensor(B#N, actions_num)
+                actions_scores, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)  # tensor(B#N, actions_num)
         else:
-            actions_scores = self.model((batch_data[0], batch_data[3]))
+            actions_scores = self.model((batch_data[0], batch_data[3]),seq_len=cfg.seq_len)
 
         # Predict actions
         actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
@@ -331,10 +341,13 @@ class VolleyballEpoch():
         self.confuMatrix.update(actions_in,actions_result)
         # self.actions_loss_weight.update(action_loss_w.squeeze(1), actions_in)
 
+"""
+1.this program use the sequential LSTM to processing image 
+2.use center loss
+"""
 
 if __name__ == '__main__':
-    introduce = "base self model renew weight 1e-4"
-    print(introduce)
+    introduce = "the new base model(LSTM include) train"
     cfg = Config()
     np.set_printoptions(precision=3)
     para_path = None
@@ -356,7 +369,7 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     # generate the volleyball dataset object
-    full_dataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, mode=cfg.dataset_mode)
+    full_dataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, mode=cfg.dataset_mode, seq_num=cfg.seq_len)
     # get the object information(object categories count)
     cfg.actions_num, cfg.activities_num = full_dataset.classCount()
 
@@ -381,21 +394,21 @@ if __name__ == '__main__':
                                                             mode=1)
         testDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.test_seqs,
                                                            mode=0)
-    else:  split_mode = 1
+    else:  # split_mode = 1
         trainDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.train_seqs,
-                                                            mode=cfg.dataset_mode)
+                                                            mode=cfg.dataset_mode,seq_num=cfg.seq_len)
         testDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.test_seqs,
-                                                           mode=cfg.dataset_mode)
+                                                           mode=cfg.dataset_mode,seq_num=cfg.seq_len)
     # begin model train in
     #   dataloader implement
     params = {
         'batch_size': cfg.batch_size,
         'shuffle': True
     }
-    train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.new_collate, **params)
-    test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.new_collate, **params)
+    train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.seq_collate, **params)
+    test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.seq_collate, **params)
     #    build model
-    model = BBonemodel.SelfNet2(cfg.imageSize, cfg.crop_size, cfg.actions_num, device, **cfg.model_para)  # type: SelfNet2
+    model = BBonemodel.SelfNetS(cfg.imageSize, cfg.crop_size, cfg.actions_num, device, **cfg.model_para)  # type: SelfNet2
     model.to(device=device)
     model.train()
     #    optimizer implement
@@ -403,6 +416,7 @@ if __name__ == '__main__':
         [
             {"params": model.baselayer.backbone_net.parameters()},
             {"params": model.baselayer.mod_embed.parameters()},
+            {"params": model.fea_lstm.parameters()},
             {"params": model.read_actions.parameters()}
         ],
         lr=cfg.train_learning_rate,
@@ -430,7 +444,7 @@ if __name__ == '__main__':
         model.train()
         # check use center loss or not
         if cfg.center_loss_weight > 0:
-            train_result_info = VolleyballEpoch('train', train_loader, model, device, cfg=cfg, optimizer=optimizer,lossmodel=center_loss,optimizer2=lossOpti ,epoch=epoch).main()
+            train_result_info = VolleyballEpoch('train', train_loader, model, device, cfg=cfg, optimizer=optimizer,lossmodel=center_loss,optimizer2=lossOpti, epoch=epoch).main()
         else:
             train_result_info = VolleyballEpoch('train', train_loader, model, device, cfg=cfg, optimizer=optimizer, epoch=epoch).main()
         for each_info in train_result_info:

@@ -39,7 +39,7 @@ class Config(object):
         """
         1: manually split 2: random split with stable seed 3: random split with random seed 4： for train set read all frames, for test set read central frame
         """
-        self.split_mode = 1
+        self.split_mode = 2
         """
         0. read the central frame from the sequence 
         1. read all frames from the sequence
@@ -70,13 +70,12 @@ class Config(object):
             'dropout_prob': 0.5,
             'feature1_renew_rate': 0.2,
             'biasNet_channel_pos': 8,
-            'biasNet_channel_dis': [0, 0.15,0.3,0.5],
+            'biasNet_channel_dis': [0, 0.15, 0.3, 0.5],
             'iterative_times': 1,
             'routing_times': 3,
             'pooling_method': 'ave',
             'readout_max_num': 6,
-            'readout_mode': 'con',
-            
+            'readout_mode': 'con'
         }
         # training parameter
         """
@@ -121,7 +120,9 @@ class Config(object):
         self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.activities_loss_weight = 1.
-        self.center_loss_weight = 1 
+        self.oriens_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+        self.oriens_loss_weight = 1.
+        self.center_loss_weight = 1. 
         self.focal_loss_use = True
         self.kl_loss_weight = 0
         self.other_actions_loss_weight = 0.2
@@ -157,20 +158,26 @@ class Config(object):
         print("The output result will be saved in %s" % self.outputPath)
 
     def loss_apply(self):
-       loss_plan1 = {
+        """
+        1:actions_loss_weight
+        2:oriens_loss_weight
+        3:activities_loss_weight
+        4:center_loss_weight
+        """
+        loss_plan1 = {
             1: {
                 1: 0, 2: 2.0, 3: 0.1
             },
             21: {
                 1: 1.0, 2: 1.0, 3: 0.1
             }
-       }
-       loss_plan2 = {
+        }
+        loss_plan2 = {
             1: {
-                1: 1, 2: 2.0, 3:0.01
+                1: 1, 2: 1.0, 3:1.,4:0.1
             }
-       }
-       self.loss_plan = loss_plan2
+        }
+        self.loss_plan = loss_plan2
         
     def lr_apply(self):
         lr_plan1 = {
@@ -197,7 +204,7 @@ class Config(object):
         }
         lr_plan3 = {
             1: {
-                1: 0, 2: 1e-5, 3: 1e-5, 4: 1e-5
+                1: 0, 2: 1e-5, 3: 1e-5, 4: 1e-5, 5: 1e-5
             }
         }
         self.lr_plan = lr_plan3
@@ -209,6 +216,8 @@ new backbone training
 2. add confusion matrix
 3. add average acc of each class 
 4. contains center loss
+5. use LSTM model
+6. use new label orientation and area
 '''
 
 class VolleyballEpoch():
@@ -225,10 +234,15 @@ class VolleyballEpoch():
         self.centerlossModel = lossmodel
         self.lossOpti = optimizer2
 
-        self.actions_meter = AverageMeterTensor(cfg.actions_num)
         self.loss_meter = AverageMeter()
+        # action meter
+        self.actions_meter = AverageMeterTensor(cfg.actions_num)
         self.actions_loss_weight = GeneralAverageMeterTensor(cfg.actions_num)
         self.confuMatrix = CorelationMeter(cfg.actions_num)
+        # orientation meter
+        self.oriens_meter = AverageMeterTensor(cfg.orientations_num)
+        self.confuMatrix2 = CorelationMeter(cfg.orientations_num)
+
         self.epoch_timer = Timer()
 
         self.total_loss = None
@@ -270,7 +284,12 @@ class VolleyballEpoch():
                 'actions_ave_acc': self.actions_meter.ave_rate,
                 'actions_each_acc': self.actions_meter.correct_rate_each.numpy().round(3),
                 'actions_each_num': self.actions_meter.all_num_each,
-                'actions_confusion': self.confuMatrix.class_acc.numpy().round(3)
+                'actions_confusion': self.confuMatrix.class_acc.numpy().round(3),
+                'oriens_acc': self.oriens_meter.correct_rate,
+                'oriens_ave_acc': self.oriens_meter.ave_rate,
+                'oriens_each_acc': self.oriens_meter.correct_rate_each.numpy().round(3),
+                'oriens_each_num': self.oriens_meter.all_num_each,
+                'oriens_confusion': self.confuMatrix2.class_acc.numpy().round(3)
             }
         elif self.mode == 'test':
             print("Testing in test dataset")
@@ -287,7 +306,12 @@ class VolleyballEpoch():
                 'actions_ave_acc': self.actions_meter.ave_rate,
                 'actions_each_acc': self.actions_meter.correct_rate_each.numpy().round(3),
                 'actions_each_num': self.actions_meter.all_num_each,
-                'actions_confusion': self.confuMatrix.class_acc.numpy().round(3)
+                'actions_confusion': self.confuMatrix.class_acc.numpy().round(3),
+                'oriens_acc': self.oriens_meter.correct_rate,
+                'oriens_ave_acc': self.oriens_meter.ave_rate,
+                'oriens_each_acc': self.oriens_meter.correct_rate_each.numpy().round(3),
+                'oriens_each_num': self.oriens_meter.all_num_each,
+                'oriens_confusion': self.confuMatrix2.class_acc.numpy().round(3)
             }
         else:
             assert False, "mode name incorrect"
@@ -304,45 +328,62 @@ class VolleyballEpoch():
         actions_in = torch.cat(batch_data[2], dim=0)
         actions_in = actions_in.reshape(-1).to(device=self.device)
 
+        # reshape the orientation label into tensor(B*N)
+        oriens_in = torch.cat(batch_data[4], dim=0)
+        oriens_in = oriens_in.reshape(-1).to(device=self.device)
+
         # forward
         if self.mode == 'train':
             if self.cfg.center_loss_weight > 0:
-                actions_scores, actions_fea, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)
+                actions_scores,oriens_scores,actions_fea,actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)
             else:
-                actions_scores, actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)  # tensor(B#N, actions_num)
+                actions_scores,oriens_scores,actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)  # tensor(B#N, actions_num)
         else:
-            actions_scores = self.model((batch_data[0], batch_data[3]),seq_len=cfg.seq_len)
+            actions_scores,oriens_scores = self.model((batch_data[0], batch_data[3]),seq_len=cfg.seq_len)
 
         # Predict actions
         actions_weights = torch.tensor(self.cfg.actions_weights).to(device=self.device)
+        oriens_weights = torch.tensor(self.cfg.oriens_weights).to(device=self.device)
+
         # loss
         if self.cfg.focal_loss_use:
             #   focal loss
             focal_loss = loss_lab.Focalloss()
             actions_loss, action_loss_w = focal_loss(actions_scores, actions_in, self.device, weight=actions_weights)
+            oriens_loss, oriens_loss_w = focal_loss(oriens_scores, oriens_in, self.device, weight=oriens_weights)
         else:
             #   cross entropy
             actions_loss = F.cross_entropy(actions_scores, actions_in, weight=actions_weights)
+            oriens_loss = F.cross_entropy(oriens_scores, oriens_in, weight=oriens_weights)
         
         
         actions_result = torch.argmax(actions_scores, dim=1).int()
+        oriens_result = torch.argmax(oriens_scores, dim=1).int()
 
         # Total loss
-        self.total_loss = self.cfg.actions_loss_weight * actions_loss
+        self.total_loss = self.cfg.actions_loss_weight * actions_loss + self.cfg.oriens_loss_weight * oriens_loss
 
         # add center loss
         if self.cfg.center_loss_weight>0 and self.mode == 'train':
             self.total_loss += self.cfg.center_loss_weight * self.centerlossModel(actions_fea, actions_in)
 
         # Get accuracy
-        self.actions_meter.update(actions_result, actions_in)
         self.loss_meter.update(self.total_loss.item(), batch_size)
+
+        self.actions_meter.update(actions_result, actions_in)
         self.confuMatrix.update(actions_in,actions_result)
+
+        self.oriens_meter.update(oriens_result, oriens_in)
+        self.confuMatrix2.update(oriens_in, oriens_result)
         # self.actions_loss_weight.update(action_loss_w.squeeze(1), actions_in)
 
+"""
+1.this program use the sequential LSTM to processing image 
+2.use center loss
+"""
 
 if __name__ == '__main__':
-    introduce = "the new base model(LSTM include) train"
+    introduce = "the base model(LSTM include) train with orientation label"
     cfg = Config()
     np.set_printoptions(precision=3)
     para_path = None
@@ -351,6 +392,8 @@ if __name__ == '__main__':
                'waiting']
     ACTIVITIES = ['r_set', 'r_spike', 'r-pass', 'r_winpoint',
                   'l_set', 'l-spike', 'l-pass', 'l_winpoint']
+    ORIENTATION = ['up','down','left','right','up-left',
+                   'up-right','down-left','down-right']
     # create logger object
     log = utils.Logger(cfg.outputPath)
     log.fPrint(introduce)
@@ -364,9 +407,9 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     # generate the volleyball dataset object
-    full_dataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, mode=cfg.dataset_mode, seq_num=cfg.seq_len)
+    full_dataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, seq_num=cfg.seq_len)
     # get the object information(object categories count)
-    cfg.actions_num, cfg.activities_num = full_dataset.classCount()
+    cfg.actions_num, cfg.activities_num, cfg.orientations_num = full_dataset.classCount()
 
     # divide the whole dataset into train and test
     full_dataset_len = full_dataset.__len__()
@@ -400,10 +443,10 @@ if __name__ == '__main__':
         'batch_size': cfg.batch_size,
         'shuffle': True
     }
-    train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.seq_collate, **params)
-    test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.seq_collate, **params)
+    train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.seq_collate_new, **params)
+    test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.seq_collate_new, **params)
     #    build model
-    model = BBonemodel.SelfNetS(cfg.imageSize, cfg.crop_size, cfg.actions_num, device, **cfg.model_para)  # type: SelfNet2
+    model = BBonemodel.SelfNetSN(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.orientations_num, device, **cfg.model_para)  # type: SelfNet2
     model.to(device=device)
     model.train()
     #    optimizer implement
@@ -412,7 +455,8 @@ if __name__ == '__main__':
             {"params": model.baselayer.backbone_net.parameters()},
             {"params": model.baselayer.mod_embed.parameters()},
             {"params": model.fea_lstm.parameters()},
-            {"params": model.read_actions.parameters()}
+            {"params": model.read_actions.parameters()},
+            {"params": model.read_orientations.parameters()}
         ],
         lr=cfg.train_learning_rate,
         weight_decay=cfg.weight_decay)
@@ -427,8 +471,10 @@ if __name__ == '__main__':
     #    begin training
     start_epoch = cfg.start_epoch
     all_info = []
-    best_result = MaxItem()
-    best_ave = MaxItem()
+    best_result_ac = MaxItem()
+    best_ave_ac = MaxItem()
+    best_result_or = MaxItem()
+    best_ave_or = MaxItem()
     for epoch in range(start_epoch, start_epoch + cfg.max_epoch):
         if epoch in cfg.lr_plan:
             adjust_lr(optimizer, cfg.lr_plan[epoch], log)
@@ -448,6 +494,8 @@ if __name__ == '__main__':
         TBWriter.add_scalar('train1_loss', train_result_info['loss'], epoch)
         TBWriter.add_scalar('train1_acc', train_result_info['actions_acc'], epoch)
         TBWriter.add_scalars('train1_acc_each', dict(zip(ACTIONS, train_result_info['actions_each_acc'])), epoch)
+        TBWriter.add_scalar('train1_acc', train_result_info['oriens_acc'], epoch)
+        TBWriter.add_scalars('train1_acc_each', dict(zip(ORIENTATION, train_result_info['oriens_each_acc'])), epoch)
         #  test in each interval times
         if epoch % cfg.test_interval_epoch == 0 or epoch == start_epoch:
             model.train(False)
@@ -456,17 +504,23 @@ if __name__ == '__main__':
                 log.fPrint('%s:\n%s\n' % (str(each_info), str(test_result_info[each_info])))
             TBWriter.add_scalar('test1_loss', test_result_info['loss'], epoch)
             TBWriter.add_scalar('test1_acc', test_result_info['actions_acc'], epoch)
-            TBWriter.add_scalars('test1_acc_each', dict(zip(ACTIONS, test_result_info['actions_each_acc'])),
-                                 epoch)
+            TBWriter.add_scalars('test1_acc_each', dict(zip(ACTIONS, test_result_info['actions_each_acc'])), epoch)
+            TBWriter.add_scalar('test1_acc', test_result_info['oriens_acc'], epoch)
+            TBWriter.add_scalars('test1_acc_each', dict(zip(ORIENTATION, test_result_info['oriens_each_acc'])), epoch)
             filepath = cfg.outputPath + '/model/stage%d_epoch%d_%.2f%%.pth' % (
                 1, epoch, test_result_info['actions_acc'])
             model.savemodel(filepath)
             para_path = filepath
             # log the best result
-            best_result.update(test_result_info['actions_acc'], test_result_info['epoch'])
-            best_ave.update(test_result_info['actions_ave_acc'], test_result_info['epoch'])
-            log.fPrint('best result: %.4f in epoch %d' % (best_result.maxitem, best_result.maxnum))
-            log.fPrint('best ave: %.4f in epoch %d' % (best_ave.maxitem, best_ave.maxnum))
+            best_result_ac.update(test_result_info['actions_acc'], test_result_info['epoch'])
+            best_ave_ac.update(test_result_info['actions_ave_acc'], test_result_info['epoch'])
+            log.fPrint('best result: %.4f in epoch %d' % (best_result_ac.maxitem, best_result_ac.maxnum))
+            log.fPrint('best ave: %.4f in epoch %d' % (best_ave_ac.maxitem, best_ave_ac.maxnum))
+
+            best_result_or.update(test_result_info['oriens_acc'], test_result_info['epoch'])
+            best_ave_or.update(test_result_info['oriens_ave_acc'], test_result_info['epoch'])
+            log.fPrint('best result: %.4f in epoch %d' % (best_result_or.maxitem, best_result_or.maxnum))
+            log.fPrint('best ave: %.4f in epoch %d' % (best_ave_or.maxitem, best_ave_or.maxnum))
 
         if epoch > 10 + start_epoch:
                 if abs(all_info[epoch - start_epoch]['loss'] - all_info[epoch - start_epoch - 1][

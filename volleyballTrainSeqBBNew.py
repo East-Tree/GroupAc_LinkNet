@@ -114,13 +114,13 @@ class Config(object):
         self.test_interval_epoch = 2
 
         # loss function parameter
-        self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
-        #self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
+        #self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
+        self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
         #self.actions_weights = [1., 1., 1., 3., 1., 1., 1., 1., 1.]
         self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.activities_loss_weight = 1.
-        self.oriens_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+        self.oriens_weights = [2.0, 2.0, 1.0, 1.0, 3.0, 3.0, 3.0, 3.0]
         self.oriens_loss_weight = 1.
         self.center_loss_weight = 1. 
         self.focal_loss_use = True
@@ -174,7 +174,7 @@ class Config(object):
         }
         loss_plan2 = {
             1: {
-                1: 1, 2: 1.0, 3:1.,4:0.1
+                1: 1, 2: 1.0, 3:1.,4:0.01
             }
         }
         self.loss_plan = loss_plan2
@@ -204,7 +204,7 @@ class Config(object):
         }
         lr_plan3 = {
             1: {
-                1: 0, 2: 1e-5, 3: 1e-5, 4: 1e-5, 5: 1e-5
+                1: 0, 2: 5e-6, 3: 5e-6, 4: 5e-6, 5: 5e-6
             }
         }
         self.lr_plan = lr_plan3
@@ -514,13 +514,13 @@ if __name__ == '__main__':
             # log the best result
             best_result_ac.update(test_result_info['actions_acc'], test_result_info['epoch'])
             best_ave_ac.update(test_result_info['actions_ave_acc'], test_result_info['epoch'])
-            log.fPrint('best result: %.4f in epoch %d' % (best_result_ac.maxitem, best_result_ac.maxnum))
-            log.fPrint('best ave: %.4f in epoch %d' % (best_ave_ac.maxitem, best_ave_ac.maxnum))
+            log.fPrint('best result action: %.4f in epoch %d' % (best_result_ac.maxitem, best_result_ac.maxnum))
+            log.fPrint('best ave action: %.4f in epoch %d' % (best_ave_ac.maxitem, best_ave_ac.maxnum))
 
             best_result_or.update(test_result_info['oriens_acc'], test_result_info['epoch'])
             best_ave_or.update(test_result_info['oriens_ave_acc'], test_result_info['epoch'])
-            log.fPrint('best result: %.4f in epoch %d' % (best_result_or.maxitem, best_result_or.maxnum))
-            log.fPrint('best ave: %.4f in epoch %d' % (best_ave_or.maxitem, best_ave_or.maxnum))
+            log.fPrint('best result orientation: %.4f in epoch %d' % (best_result_or.maxitem, best_result_or.maxnum))
+            log.fPrint('best ave orientation: %.4f in epoch %d' % (best_ave_or.maxitem, best_ave_or.maxnum))
 
         if epoch > 10 + start_epoch:
                 if abs(all_info[epoch - start_epoch]['loss'] - all_info[epoch - start_epoch - 1][

@@ -312,8 +312,9 @@ def adjust_loss(cfg, loss_plan, logger):
     logger.fPrint('change loss weight:' + str(loss_plan))
     
     cfg.actions_loss_weight = loss_plan[1]
-    cfg.activities_loss_weight = loss_plan[2]
-    cfg.center_loss_weight = loss_plan[3]
+    cfg.oriens_loss_weight = loss_plan[2]
+    cfg.activities_loss_weight = loss_plan[3]
+    cfg.center_loss_weight = loss_plan[4]
    
 
 def label_gather(cate_size, obj_tensor, res_tensor):

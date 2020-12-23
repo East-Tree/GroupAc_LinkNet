@@ -621,7 +621,8 @@ class VolleyballDatasetNew(data.Dataset):
         return data0
 
     def readTrack(self):
-        trackPath = self.datasetPath + '/tracks_normalized.pkl'
+        trackPath = self.datasetPath + '/tracks_normalized_new.pkl'
+
         return pickle.load(open(trackPath, 'rb'))
 
     def readAllFrames(self):

@@ -115,8 +115,8 @@ class Config(object):
 
         # loss function parameter
         #self.actions_weights = [0.5453, 0.5881, 1.1592, 3.9106, 0.2717, 1.0050, 1.1020, 0.0352, 0.3830]  # weight for each actions categories
-        self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
-        #self.actions_weights = [1., 1., 1., 3., 1., 1., 1., 1., 1.]
+        #self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
+        self.actions_weights = [1., 1., 1., 3., 1., 1., 1., 1., 1.]
         self.actions_loss_weight = 1.  # weight for actions in loss function
         self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.activities_loss_weight = 1.
@@ -174,7 +174,7 @@ class Config(object):
         }
         loss_plan2 = {
             1: {
-                1: 1, 2: 1.0, 3:1.,4:0.01
+                1: 0, 2: 1.0, 3:1.,4:0.1
             }
         }
         self.loss_plan = loss_plan2
@@ -205,6 +205,12 @@ class Config(object):
         lr_plan3 = {
             1: {
                 1: 0, 2: 5e-6, 3: 5e-6, 4: 5e-6, 5: 5e-6
+            },
+            11: {
+                1: 0, 2: 2e-6, 3: 2e-6, 4: 2e-6, 5: 2e-6
+            },
+            31: {
+                1: 0, 2: 1e-6, 3: 1e-6, 4: 1e-6, 5: 1e-6
             }
         }
         self.lr_plan = lr_plan3
@@ -284,6 +290,7 @@ class VolleyballEpoch():
                 'actions_ave_acc': self.actions_meter.ave_rate,
                 'actions_each_acc': self.actions_meter.correct_rate_each.numpy().round(3),
                 'actions_each_num': self.actions_meter.all_num_each,
+                'actions_loss_weights': self.actions_loss_weight.correct_rate_each.numpy().round(3),
                 'actions_confusion': self.confuMatrix.class_acc.numpy().round(3),
                 'oriens_acc': self.oriens_meter.correct_rate,
                 'oriens_ave_acc': self.oriens_meter.ave_rate,
@@ -335,7 +342,8 @@ class VolleyballEpoch():
         # forward
         if self.mode == 'train':
             if self.cfg.center_loss_weight > 0:
-                actions_scores,oriens_scores,actions_fea,actions_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)
+                actions_scores,oriens_scores,actions_fea,label_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in,addi_label=oriens_in,seq_len=cfg.seq_len)
+                actions_in, oriens_in = label_in
             else:
                 actions_scores,oriens_scores,actions_in = self.model((batch_data[0], batch_data[3]),mode='train',cata_balance=self.cfg.cata_balance,label=actions_in,seq_len=cfg.seq_len)  # tensor(B#N, actions_num)
         else:
@@ -372,6 +380,7 @@ class VolleyballEpoch():
 
         self.actions_meter.update(actions_result, actions_in)
         self.confuMatrix.update(actions_in,actions_result)
+        self.actions_loss_weight.update(action_loss_w.reshape(-1), actions_in)
 
         self.oriens_meter.update(oriens_result, oriens_in)
         self.confuMatrix2.update(oriens_in, oriens_result)
@@ -511,6 +520,7 @@ if __name__ == '__main__':
                 1, epoch, test_result_info['actions_acc'])
             model.savemodel(filepath)
             para_path = filepath
+
             # log the best result
             best_result_ac.update(test_result_info['actions_acc'], test_result_info['epoch'])
             best_ave_ac.update(test_result_info['actions_ave_acc'], test_result_info['epoch'])

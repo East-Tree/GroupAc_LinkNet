@@ -223,17 +223,21 @@ class SelfNet0(nn.Module):
         return self_features
 
 # randomly organize the output individual feature
-def category_balance(input0, label0, batch0=None):
+def category_balance(input0, label0, batch0=None, class_num=9):
 
     """
-    :param input0: tensor(batch,fea)
+    :param input0: tensor(batch,fea) or list[tensor(batch,fea), ...]
     :param label0: rensor(batch)
     :return: tensor(batch,fea)
     """
-    cate_num = 9
-    assert input0.size()[0] == label0.size()[0], 'input tensor should be same with index tensor in 0 dim'
+    cate_num = class_num
+    if isinstance(input0,list):
+        for item in input0:
+            assert item.size()[0] == label0.size()[0], 'input tensor should be same with index tensor in 0 dim'
+    else:
+        assert input0.size()[0] == label0.size()[0], 'input tensor should be same with index tensor in 0 dim'
     if batch0 == None:
-        batch = input0.size()[0]
+        batch = label0.size()[0]
     else:
         batch = batch0
     # calculate each category num in label0
@@ -257,8 +261,11 @@ def category_balance(input0, label0, batch0=None):
         instance = int(rand * (num))
         index.append(labelInfo[cate]['index'][instance])
 
-    outputTensor = torch.index_select(input0, 0, torch.tensor(index).to(device=input0.device))
-    outputLabel = torch.index_select(label0, 0, torch.tensor(index).to(device=input0.device))
+    if isinstance(input0,list):
+        outputTensor = [torch.index_select(i, 0, torch.tensor(index).to(device=i.device)) for i in input0]
+    else:
+        outputTensor = torch.index_select(input0, 0, torch.tensor(index).to(device=input0.device))
+    outputLabel = torch.index_select(label0, 0, torch.tensor(index).to(device=label0.device))
 
     return outputTensor, outputLabel
 
@@ -428,7 +435,7 @@ class SelfNetSN(nn.Module):
         self.read_actions.load_state_dict(state['read_actions_dict'])
         print('Load model states from: ', filepath)
 
-    def forward(self, batch_data, mode=None, return_fea=False,cata_balance=False,label=None, seq_len=1):
+    def forward(self, batch_data, mode=None, return_fea=False,cata_balance=False,label=None, addi_label=None, seq_len=1):
         # image_in is a list containing image batch data()tensor(c,h,w)
         # boxes_in is a list containing bbox batch data()tensor(num,4)
         # in order to apply the lstm after feature embeding, the fitted data is orgnized as [f00,f10,f01,f11,f02,f12]
@@ -448,7 +455,15 @@ class SelfNetSN(nn.Module):
         # Predict actions
         # boxes_states_flat = boxes_features.reshape(-1, NFB)  # B*N, NFB
         if mode == 'train' and cata_balance:
-            self_features, feature_label = category_balance(self_features,feature_label)
+            if addi_label is None:
+                self_features, feature_label = category_balance(self_features,feature_label)
+            else:
+                feature_list, feature_label = category_balance([self_features,addi_label], feature_label)
+                self_features = feature_list[0]
+                feature_label = [feature_label]
+                feature_label.extend(feature_list[1:])
+        else:
+            feature_label = [label, addi_label]
         actions_scores = self.read_actions(self_features)  # B*N, actions_num
         orien_scores = self.read_orientations(self_features) # B*N, orien_num
 

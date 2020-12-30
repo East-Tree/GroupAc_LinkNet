@@ -389,15 +389,19 @@ class SelfNetSN(nn.Module):
         # LSTM model to analyze the personal feature
         self.fea_lstm = nn.LSTM(self.arch_para['person_fea_dim'],self.arch_para['person_fea_dim'])
 
+        if self.arch_para['fea_decoup']:
+            op = 2
+        else:
+            op = 1
         # action model
         self.read_actions = nn.Sequential(
-            nn.Linear(self.arch_para['person_fea_dim'], self.actions_num),
+            nn.Linear(self.arch_para['person_fea_dim']//op, self.actions_num),
             nn.LeakyReLU()
         )
 
         # orientation model
         self.read_orientations = nn.Sequential(
-            nn.Linear(self.arch_para['person_fea_dim'], self.orien_num),
+            nn.Linear(self.arch_para['person_fea_dim']//op, self.orien_num),
             nn.LeakyReLU()
         )
 
@@ -408,6 +412,7 @@ class SelfNetSN(nn.Module):
 
     def para_align(self, para):
         arch_para = {
+            'fea_decoup' : False,
             'person_fea_dim': 2048,
             'state_fea_dim': 512,
             'dropout_prob': 0.3
@@ -431,8 +436,11 @@ class SelfNetSN(nn.Module):
 
     def loadmodel(self, filepath):
         state = torch.load(filepath)
-        self.baselayer.load_state_dict(state['base_state_dict'])
+        self.baselayer.backbone_net.load_state_dict(state['base_state_dict'])
+        self.baselayer.mod_embed.load_state_dict(state['mod_embed_state_dict'])
+        self.fea_lstm.load_state_dict(state['fea_lstm_state_dict'])
         self.read_actions.load_state_dict(state['read_actions_dict'])
+        self.read_orientations.load_state_dict(state['read_orien_dict'])
         print('Load model states from: ', filepath)
 
     def forward(self, batch_data, mode=None, return_fea=False,cata_balance=False,label=None, addi_label=None, seq_len=1):
@@ -464,8 +472,15 @@ class SelfNetSN(nn.Module):
                 feature_label.extend(feature_list[1:])
         else:
             feature_label = [label, addi_label]
-        actions_scores = self.read_actions(self_features)  # B*N, actions_num
-        orien_scores = self.read_orientations(self_features) # B*N, orien_num
+        
+        if self.arch_para['fea_decoup']:
+            inte = self.arch_para(['person_fea_dim'])
+            inte2 = self.arch_para(['person_fea_dim'])//2
+            actions_scores = self.read_actions(self_features[:,0:inte2])
+            orien_scores = self.read_orientations(self_features[:,inte2:inte])
+        else:
+            actions_scores = self.read_actions(self_features)  # B*N, actions_num
+            orien_scores = self.read_orientations(self_features) # B*N, orien_num
 
         if mode == 'train':
             if return_fea:

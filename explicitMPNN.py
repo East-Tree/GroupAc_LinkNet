@@ -22,7 +22,11 @@ class GCN(nn.Module):
         self.arch_para = self.para_align(arch_feature)
 
         # metric embeding layer
-        self.metric_embed = nn.Sequential(
+        self.metric_embedS = nn.Sequential(
+            nn.Linear(self.fea_dim, self.arch_para['metric_dim']),
+            nn.Sigmoid()
+        )
+        self.metric_embedR = nn.Sequential(
             nn.Linear(self.fea_dim, self.arch_para['metric_dim']),
             nn.Sigmoid()
         )
@@ -66,8 +70,9 @@ class GCN(nn.Module):
         # data (num*fea_dim)
 
         # the metric embedding
-        metric = self.metric_embed(data)  # (num*metric dim)
-        relation = torch.mm(metric, metric.transpose(0,1)) # (num * num)
+        metricS = self.metric_embedS(data)  # (num*metric dim)
+        metricR = self.metric_embedR(data)  # (num*metric dim)
+        relation = torch.mm(metricS, metricR.transpose(0,1)) # (num * num)
         relation = F.softmax(relation,dim=1)
 
         # GCN layer

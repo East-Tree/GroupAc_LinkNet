@@ -63,7 +63,7 @@ class Config(object):
         self.emb_features = 1056
 
         self.model_para = {
-            'fea_decoup' : False,
+            'fea_decoup' : True,
             'person_fea_dim': 1024,
             'GCN_embed_fea': 256,
             'metric_dim': 100,
@@ -85,7 +85,8 @@ class Config(object):
         """
         self.train_mode = 0
         self.load_para = True
-        self.para_load_path = '/media/hpc/ssd960/chenduyu/result/201230-01/model/stage1_epoch44_78.92%.pth'
+        # self.para_load_path = '/media/hpc/ssd960/chenduyu/result/201230-01/model/stage1_epoch44_78.92%.pth'
+        self.para_load_path = '/media/hpc/ssd960/chenduyu/result/201230-02/model/stage1_epoch62_79.87%.pth'
         self.goon = False
         self.goon_path1 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200325-01/model/stage1_epoch160_68.34%.pth'
         self.goon_path2 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_optimizer_epoch160.pth'
@@ -117,7 +118,7 @@ class Config(object):
         self.oriens_weights = [2.0, 2.0, 1.0, 1.0, 3.0, 3.0, 3.0, 3.0]
         self.oriens_loss_weight = 1.
         self.center_loss_weight = 0
-        self.focal_loss_use = True
+        self.focal_loss_use = False
         self.kl_loss_weight = 0
         self.other_actions_loss_weight = 0.2
 
@@ -168,7 +169,7 @@ class Config(object):
         }
         loss_plan2 = {
             1: {
-                1: 0, 2: 0, 3:1.,4:0
+                1: 0, 2: 0, 3: 1., 4: 0
             }
         }
         self.loss_plan = loss_plan2
@@ -181,7 +182,7 @@ class Config(object):
         }
         lr_plan2 = {
             1: {
-                1: 0, 2: 1e-4, 3: 1e-4
+                1: 0, 2: 5e-5, 3: 5e-5
             },
             21: {
                 1: 0, 2: 2e-5, 3: 1e-5
@@ -320,11 +321,12 @@ class VolleyballEpoch():
         if self.cfg.focal_loss_use:
             #   focal loss
             focal_loss = loss_lab.Focalloss()
-            activities_loss, activities_loss_w = focal_loss(activities_scores, activities_in, self.device, weight=activities_weights)
+            activities_loss, activities_loss_w = focal_loss(activities_scores, activities_in, self.device, weight=activities_weights, attenuate=4.)
             
         else:
             #   cross entropy
             activities_loss = F.cross_entropy(activities_scores, activities_in, weight=activities_weights)
+            activities_loss_w = torch.tensor([[1.]*batch_size])
             
         
         
@@ -374,7 +376,7 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     # generate the volleyball dataset object
-    full_dataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, seq_num=cfg.seq_len)
+    full_dataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, dataagument=True ,seq_num=cfg.seq_len)
     # get the object information(object categories count)
     cfg.actions_num, cfg.activities_num, cfg.orientations_num = full_dataset.classCount()
 
@@ -413,13 +415,13 @@ if __name__ == '__main__':
     train_loader = data.DataLoader(trainDataset, collate_fn=volleyballDataset.seq_collate_new, **params)
     test_loader = data.DataLoader(testDataset, collate_fn=volleyballDataset.seq_collate_new, **params)
     #    build model
-    model = explicitMPNN.exp_GCN(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.orientations_num,cfg.activities_num,coor_use=True,area_use=True,device=device, **cfg.model_para)  # type: SelfNet2
+    model = explicitMPNN.imp_GCN(cfg.imageSize, cfg.crop_size, cfg.actions_num, cfg.orientations_num,cfg.activities_num,coor_use=True,area_use=True,device=device, **cfg.model_para)  # type: SelfNet2
     model.to(device=device)
     model.train()
     #    optimizer implement
     optimizer = optim.Adam(
         [
-            {"params": model.selfnet.parameters()},
+            {"params": model.baselayer.parameters()},
             {"params": model.GCN_layer.parameters()},
             {"params": model.read_activity.parameters()}
         ],
@@ -473,8 +475,8 @@ if __name__ == '__main__':
             # log the best result
             best_result_acv.update(test_result_info['activities_acc'], test_result_info['epoch'])
             best_ave_acv.update(test_result_info['activities_ave_acc'], test_result_info['epoch'])
-            log.fPrint('best result action: %.4f in epoch %d' % (best_result_acv.maxitem, best_result_acv.maxnum))
-            log.fPrint('best ave action: %.4f in epoch %d' % (best_ave_acv.maxitem, best_ave_acv.maxnum))
+            log.fPrint('best result activity: %.4f in epoch %d' % (best_result_acv.maxitem, best_result_acv.maxnum))
+            log.fPrint('best ave activity: %.4f in epoch %d' % (best_ave_acv.maxitem, best_ave_acv.maxnum))
 
 
         if epoch > 10 + start_epoch:

@@ -474,8 +474,8 @@ class SelfNetSN(nn.Module):
             feature_label = [label, addi_label]
         
         if self.arch_para['fea_decoup']:
-            inte = self.arch_para(['person_fea_dim'])
-            inte2 = self.arch_para(['person_fea_dim'])//2
+            inte = self.arch_para['person_fea_dim']
+            inte2 = self.arch_para['person_fea_dim']//2
             actions_scores = self.read_actions(self_features[:,0:inte2])
             orien_scores = self.read_orientations(self_features[:,inte2:inte])
         else:

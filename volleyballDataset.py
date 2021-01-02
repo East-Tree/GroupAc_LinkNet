@@ -627,18 +627,26 @@ class VolleyballDatasetNew(data.Dataset):
 
     def readAllFrames(self):
         frames = []
+        for sid, anno in self.annotationData.items():
+            for fid, subAnno in anno.items():
+                frames.extend([(sid, fid)])
+        return frames
+
+    def dataAgument(self):
+        frames = []
         # calculate proportion for each categories
         max = torch.max(torch.tensor(self.dataCate).float())
         pro = max/torch.tensor(self.dataCate).float()
 
-        for sid, anno in self.annotationData.items():
-            for fid, subAnno in anno.items():
-                if self.dataagument:
-                    n = randTimes(float(pro[subAnno['group_activity']]))
-                    frames.extend([(sid, fid)] * n)
-                else:
-                    frames.extend([(sid, fid)])
-        return frames
+        for index in self.allFrames:
+            sid = index[0]
+            fid = index[1]
+            anno = self.annotationData[sid]
+            subAnno = anno[fid]
+            n = randTimes(float(pro[subAnno['group_activity']]))
+            frames.extend([(sid, fid)] * n)
+            
+        self.allFrames = frames
 
     def readSpecificFrame(self, frameIndex: tuple):
 
@@ -752,6 +760,11 @@ class VolleyballDatasetNew(data.Dataset):
 
         return imgList, activity, action, bboxList, orien, area
 
+    def set_allFrame(self,allFrame):
+        self.allFrames = allFrame
+    
+    def output_allFrame(self):
+        return self.allFrames
 
     def classCount(self):
 

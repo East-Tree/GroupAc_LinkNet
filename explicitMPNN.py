@@ -140,6 +140,7 @@ class exp_GCN(nn.Module):
     def para_align(self, para):
         arch_para = {
             'fea_decoup' : True,
+            'pooling_method': 'ave',
             'GCN_embed_fea': 100,
             'person_fea_dim': 2048,
             'state_fea_dim': 512,
@@ -265,11 +266,17 @@ class imp_GCN(nn.Module):
         # LSTM model to analyze the personal feature
         self.fea_lstm = nn.LSTM(self.arch_para['person_fea_dim'],self.arch_para['person_fea_dim'])
 
-        # read out activity 
-        self.read_activity = nn.Sequential(
-            nn.Linear(self.arch_para['GCN_embed_fea'], self.activities_num),
-            nn.Sigmoid()
-        )
+        # read out activity
+        if self.arch_para['pooling_method'] == 'split':  
+            self.read_activity = nn.Sequential(
+                nn.Linear(self.arch_para['GCN_embed_fea']*2, self.activities_num),
+                nn.Sigmoid()
+            )
+        else:
+            self.read_activity = nn.Sequential(
+                nn.Linear(self.arch_para['GCN_embed_fea'], self.activities_num),
+                nn.Sigmoid()
+            )
 
         for m in self.modules():  # network initial for linear layer
             if isinstance(m, nn.Linear):
@@ -279,6 +286,7 @@ class imp_GCN(nn.Module):
     def para_align(self, para):
         arch_para = {
             'fea_decoup' : True,
+            'pooling_method': 'ave',
             'GCN_embed_fea': 100,
             'person_fea_dim': 2048,
             'state_fea_dim': 512,
@@ -356,8 +364,21 @@ class imp_GCN(nn.Module):
             activity_fea.append(self.GCN_layer(self_features[j:j+i],posi=posi[j:j+i]))
             j += i
 
+        # pooling the group activity feature
+        if self.arch_para['pooling_method'] == 'split':
+            global_fea = []
+            for i in range(batch_size):
+                area_list = batch_data[5][i].reshape(-1)
+                left_list = torch.nonzero((area_list==0)|(area_list==1)).reshape(-1).tolist()
+                right_list = torch.nonzero((area_list==2)|(area_list==3)).reshape(-1).tolist()
+                left_fea = torch.mean(activity_fea[i][left_list,:],dim=0)
+                right_fea = torch.mean(activity_fea[i][right_list,:],dim=0)
+                global_fea.append(torch.cat((left_fea,right_fea),dim=0))
+                
+        else: # ave
+            global_fea = [torch.mean(i,dim=0) for i in activity_fea]
+
         # read the activity label
-        global_fea = [torch.mean(i,dim=0) for i in activity_fea]
         global_fea = torch.stack(global_fea, dim=0)
 
         activity_score = self.read_activity(global_fea)

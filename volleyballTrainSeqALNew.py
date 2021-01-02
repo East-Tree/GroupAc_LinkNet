@@ -69,7 +69,7 @@ class Config(object):
             'metric_dim': 100,
             'general_fea_dim': 32,
             'dropout_prob': 0.5,
-            'pooling_method': 'ave',
+            'pooling_method': 'split',
             'readout_max_num': 6,
             'readout_mode': 'con'
         }
@@ -85,8 +85,9 @@ class Config(object):
         """
         self.train_mode = 0
         self.load_para = True
-        # self.para_load_path = '/media/hpc/ssd960/chenduyu/result/201230-01/model/stage1_epoch44_78.92%.pth'
-        self.para_load_path = '/media/hpc/ssd960/chenduyu/result/201230-02/model/stage1_epoch62_79.87%.pth'
+        # self.para_load_path = '/media/hpc/ssd960/chenduyu/result/201230-01/model/stage1_epoch44_78.92%.pth' # no decoup
+        # self.para_load_path = '/media/hpc/ssd960/chenduyu/result/201230-02/model/stage1_epoch62_79.87%.pth'  # decoup no data augment
+        self.para_load_path = '/media/hpc/ssd960/chenduyu/result/210101-04/model/stage1_epoch114_89.68%.pth' # decoup data augment
         self.goon = False
         self.goon_path1 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200325-01/model/stage1_epoch160_68.34%.pth'
         self.goon_path2 = '/home/kmj-labmen-007/Data1/Project/Code/HyperReco/groupActivity_GCN/result/200310-00/model/stage1_optimizer_epoch160.pth'
@@ -96,6 +97,7 @@ class Config(object):
         """
         # training
         self.cata_balance = False
+        self.dataagument = True
         self.use_gpu = True
         self.renew_weight = False
         self.batch_size = 2
@@ -113,7 +115,7 @@ class Config(object):
         #self.actions_weights = [1., 1., 2., 3., 1., 1., 2., 0.1, 1.]
         self.actions_weights = [1., 1., 1., 3., 1., 1., 1., 1., 1.]
         self.actions_loss_weight = 1.  # weight for actions in loss function
-        self.activities_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+        self.activities_weights = [1.0, 1.0, 1.0, 3.0, 1.0, 1.0, 1.0, 3.0]
         self.activities_loss_weight = 1.
         self.oriens_weights = [2.0, 2.0, 1.0, 1.0, 3.0, 3.0, 3.0, 3.0]
         self.oriens_loss_weight = 1.
@@ -185,10 +187,10 @@ class Config(object):
                 1: 0, 2: 5e-5, 3: 5e-5
             },
             21: {
-                1: 0, 2: 2e-5, 3: 1e-5
+                1: 0, 2: 2e-5, 3: 2e-5
             },
             41: {
-                1: 0, 2: 2e-6, 3: 2e-5
+                1: 0, 2: 1e-5, 3: 1e-5
             },
             250: {
                 1: 0, 2: 5e-5, 3: 5e-5
@@ -376,7 +378,9 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     # generate the volleyball dataset object
-    full_dataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, dataagument=True ,seq_num=cfg.seq_len)
+    random_seed = 137  # set the seed
+    random.seed(random_seed)
+    full_dataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, dataagument=cfg.dataagument ,seq_num=cfg.seq_len)
     # get the object information(object categories count)
     cfg.actions_num, cfg.activities_num, cfg.orientations_num = full_dataset.classCount()
 
@@ -387,8 +391,7 @@ if __name__ == '__main__':
         test_len = full_dataset_len - train_len
         trainDataset, testDataset = data.random_split(full_dataset, [train_len, test_len])
     elif cfg.split_mode == 2:
-        random_seed = 137  # set the seed
-        random.seed(random_seed)
+        
         indices = list(range(full_dataset_len))
         random.shuffle(indices)
         split = int(cfg.dataset_splitrate * full_dataset_len)

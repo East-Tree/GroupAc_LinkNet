@@ -101,6 +101,7 @@ class Config(object):
         """
         # training
         self.cata_balance = True
+        self.dataagument = True
         self.use_gpu = True
         self.renew_weight = False
         self.batch_size = 2
@@ -123,6 +124,7 @@ class Config(object):
         self.oriens_weights = [2.0, 2.0, 1.0, 1.0, 3.0, 3.0, 3.0, 3.0]
         self.oriens_loss_weight = 1.
         self.center_loss_weight = 1. 
+        self.triplet_loss_weight = 1.
         self.focal_loss_use = True
         self.kl_loss_weight = 0
         self.other_actions_loss_weight = 0.2
@@ -341,7 +343,7 @@ class VolleyballEpoch():
 
         # forward
         if self.mode == 'train':
-            if self.cfg.center_loss_weight > 0:
+            if (self.cfg.center_loss_weight > 0) or (self.cfg.triplet_loss_weight>0):
                 actions_scores,oriens_scores,actions_fea,label_in = self.model((batch_data[0], batch_data[3]),mode='train',return_fea=True,cata_balance=self.cfg.cata_balance,label=actions_in,addi_label=oriens_in,seq_len=cfg.seq_len)
                 actions_in, oriens_in = label_in
             else:
@@ -374,6 +376,11 @@ class VolleyballEpoch():
         # add center loss
         if self.cfg.center_loss_weight>0 and self.mode == 'train':
             self.total_loss += self.cfg.center_loss_weight * self.centerlossModel(actions_fea, actions_in)
+        
+        # add triplet loss
+        if self.cfg.triplet_loss_weight>0 and self.mode == 'train':
+            triplet_loss=loss_lab.TripletLoss(self.device)
+            self.total_loss += self.cfg.triplet_loss_weight * triplet_loss(actions_fea, actions_in)
 
         # Get accuracy
         self.loss_meter.update(self.total_loss.item(), batch_size)
@@ -416,10 +423,11 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     # generate the volleyball dataset object
+    random_seed = 137  # set the seed
+    random.seed(random_seed)
     full_dataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, seq_num=cfg.seq_len)
     # get the object information(object categories count)
     cfg.actions_num, cfg.activities_num, cfg.orientations_num = full_dataset.classCount()
-
     # divide the whole dataset into train and test
     full_dataset_len = full_dataset.__len__()
     if cfg.split_mode == 3:
@@ -427,15 +435,15 @@ if __name__ == '__main__':
         test_len = full_dataset_len - train_len
         trainDataset, testDataset = data.random_split(full_dataset, [train_len, test_len])
     elif cfg.split_mode == 2:
-        random_seed = 137  # set the seed
-        random.seed(random_seed)
-        indices = list(range(full_dataset_len))
+        indices = full_dataset.output_allFrame()
         random.shuffle(indices)
-        split = int(cfg.dataset_splitrate * full_dataset_len)
+        split = int(cfg.dataset_splitrate * len(indices))
         train_indices = indices[:split]
         test_indices = indices[split:]
-        trainDataset = data.Subset(full_dataset, train_indices)
-        testDataset = data.Subset(full_dataset, test_indices)
+        trainDataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, seq_num=cfg.seq_len)
+        trainDataset.set_allFrame(train_indices)
+        testDataset = volleyballDataset.VolleyballDatasetNew(cfg.dataPath, cfg.imageSize, frameList=list(range(17)) ,mode=cfg.dataset_mode, seq_num=cfg.seq_len)
+        testDataset.set_allFrame(test_indices)
     elif cfg.split_mode == 4:
         trainDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.train_seqs,
                                                             mode=1)
@@ -446,6 +454,9 @@ if __name__ == '__main__':
                                                             mode=cfg.dataset_mode,seq_num=cfg.seq_len)
         testDataset = volleyballDataset.VolleyballDatasetS(cfg.dataPath, cfg.imageSize, cfg.test_seqs,
                                                            mode=cfg.dataset_mode,seq_num=cfg.seq_len)
+    if cfg.dataagument:
+        trainDataset.dataAgument()
+        testDataset.dataAgument()
     # begin model train in
     #   dataloader implement
     params = {
